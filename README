@@ -1,0 +1,68 @@
+runge_kutta/README
+
+Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
+Time-stamp: <2013-09-30 16:07:53 (jonah)>
+
+My implementation of the 4-5 Runge-Kutta-Feldberg adaptive step size
+integrator. For simplicity, and so that I can bundle public and
+private methods together, I take an object-oriented approach.
+
+
+Background
+----------------------------------------------------------------------
+
+Assume an ODE system y' = f(t,y) for some y(t). Assume it is an
+initial value problem with y(0) = y0. (y can be a vector).
+
+The classical Runge-Kutta methods simulate higher-order terms in a
+taylor series expansion of the function f to generate a high-order
+approximation for y' and thus iteratively solves for y(t).
+
+We get the "simulated" higher-order terms in the expansion by
+evaluating the function f multiple times during a single
+time-step. RK4 evaluates the function 4 times. RK5 evaluates it 5
+times. etc.
+
+The Runge-Kutta-Feldberg method runs both an RK4 and an RK5
+algorithm together. The RK4 step is the one that will actually be
+output for the next time step. However, RK5-RK4 gives the estimated
+trunctation error, which can help determine the step size.
+
+I have taken the algorithm details from the articles on Runge-Kutta
+methods and the Runge-Kutta-Feldberg method on wikipedia:\
+http://en.wikipedia.org/wiki/Runge%E2%80%93Kutta_methods
+http://en.wikipedia.org/wiki/Runge%E2%80%93Kutta%E2%80%93Fehlberg_method
+
+----------------------------------------------------------------------
+
+
+
+Usage
+----------------------------------------------------------------------
+
+The RKF45 integrator expects a function of the form
+void f(double t, const double[n] y, int n),
+where y is the array representing the N-dimensional ODE system at time t.
+
+This means that if your system is not in this form you'll need to
+write it in this form before you can use RKF45.
+
+To start the algorithm you need an initial step size, so this must
+be input by hand.
+
+The error tolerance is, by default 0.1% of the absolute value of
+the smallest element in y. You can set absolute or relative error
+tolerance by using setter methods. You can also set the absolute
+error by using the constructor.
+
+You can choose how RKF45 outptus the solution after a given
+time. You can have it set fill a pre-allocated double array
+or you can have it output a vector.
+
+----------------------------------------------------------------------
+
+
+Installation
+----------------------------------------------------------------------
+
+STUB
