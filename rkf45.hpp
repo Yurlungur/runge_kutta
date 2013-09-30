@@ -1,7 +1,7 @@
 // rkf45.hpp
 
 // Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-// Time-stamp: <2013-09-30 16:16:27 (jonah)>
+// Time-stamp: <2013-09-30 16:20:51 (jonah)>
 
 // This is the prototype for my implementation of the 4-5
 // Runge-Kutta-Feldberg adaptive step size integrator. For simplicity,
@@ -65,7 +65,7 @@
 
 // Include guard
 # pragma once
-// Invludes
+// Includes
 #include <vector>   // for output
 #include <iostream> // For printing a given ode system
 #include <iomanip> // For manipulating the output.
@@ -95,4 +95,11 @@ public: // Constructors, destructors, and assignment operators.
   // Creates an integrator for an n-dimensional ode system. The other
   // properties are assumed to be set by setter methods.
   RKF45(int n);
+  // Copy constructor. Generates an exact copy of an integrator.
+  RKF45(const RKF45 &integrator);
+  // Destructor.
+  ~RKF45();
+  // Assignment operator. Copies one obje ct into another.
+  RKF45& operator = (const RKF45 &integrator);
 }
+
