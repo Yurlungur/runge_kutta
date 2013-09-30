@@ -1,7 +1,7 @@
 // rkf45.hpp
 
 // Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-// Time-stamp: <2013-09-30 16:04:57 (jonah)>
+// Time-stamp: <2013-09-30 16:16:27 (jonah)>
 
 // This is the prototype for my implementation of the 4-5
 // Runge-Kutta-Feldberg adaptive step size integrator. For simplicity,
@@ -30,7 +30,7 @@
 // trunctation error, which can help determine the step size.
 
 // I have taken the algorithm details from the articles on Runge-Kutta
-// methods and the Runge-Kutta-Feldberg method on wikipedia:\
+// methods and the Runge-Kutta-Feldberg method on wikipedia:
 // http://en.wikipedia.org/wiki/Runge%E2%80%93Kutta_methods
 // http://en.wikipedia.org/wiki/Runge%E2%80%93Kutta%E2%80%93Fehlberg_method
 

@@ -1,7 +1,7 @@
 runge_kutta/README
 
 Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-Time-stamp: <2013-09-30 16:07:53 (jonah)>
+Time-stamp: <2013-09-30 16:16:15 (jonah)>
 
 My implementation of the 4-5 Runge-Kutta-Feldberg adaptive step size
 integrator. For simplicity, and so that I can bundle public and
@@ -29,7 +29,7 @@ output for the next time step. However, RK5-RK4 gives the estimated
 trunctation error, which can help determine the step size.
 
 I have taken the algorithm details from the articles on Runge-Kutta
-methods and the Runge-Kutta-Feldberg method on wikipedia:\
+methods and the Runge-Kutta-Feldberg method on wikipedia:
 http://en.wikipedia.org/wiki/Runge%E2%80%93Kutta_methods
 http://en.wikipedia.org/wiki/Runge%E2%80%93Kutta%E2%80%93Fehlberg_method
 
