@@ -1,92 +1,14 @@
 // rkf45.cpp
 
 // Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-// Time-stamp: <2013-10-14 14:43:22 (jonah)>
+// Time-stamp: <2013-10-14 18:00:37 (jonah)>
 
 // This is my implementation of the 4-5 Runge-Kutta-Feldberg adaptive
 // step size integrator. For simplicity, and so that I can bundle
 // public and private methods together, I take an object-oriented
 // approach.
 
-
-// Background
-// ----------------------------------------------------------------------
-
-// Assume an ODE system y' = f(t,y) for some y(t). Assume it is an
-// initial value problem with y(0) = y0. (y can be a vector).
-
-// The classical Runge-Kutta methods simulate higher-order terms in a
-// taylor series expansion of the function f to generate a high-order
-// approximation for y' and thus iteratively solves for y(t).
-
-// We get the "simulated" higher-order terms in the expansion by
-// evaluating the function f multiple times during a single
-// time-step. RK4 evaluates the function 4 times. RK5 evaluates it 5
-// times. etc.
-
-// The Runge-Kutta-Feldberg method runs both an RK4 and an RK5
-// algorithm together. The RK4 step is the one that will actually be
-// output for the next time step. However, RK5-RK4 gives the estimated
-// trunctation error, which can help determine the step size.
-
-// I have taken the algorithm details from the articles on Runge-Kutta
-// methods and the Runge-Kutta-Feldberg method on wikipedia:
-// http://en.wikipedia.org/wiki/Runge%E2%80%93Kutta_methods
-// http://en.wikipedia.org/wiki/Runge%E2%80%93Kutta%E2%80%93Fehlberg_method
-
-// ----------------------------------------------------------------------
-
-
-
-// Usage
-// ----------------------------------------------------------------------
-
-// The RKF45 integrator expects a function of the form
-// double f(double t, const dVector& y),
-// where y is the array representing the n-dimensional ODE system at
-// time t. The length of the double vector is assumed to be
-// appropriate.
-
-// Optionally, you can have a function f of the form
-// double f(double t, dVector& y, const dVector& optional_args),
-// where the optional arguments modify f and thus f(t,y).
-
-// This means that if your system is not in this form you'll need to
-// write it in this form before you can use RKF45.
-
-// To start the algorithm you need an initial step size, so this must
-// be input by hand. If you like, you can also impose a maximum step size.
-
-// The error tolerance is the sum of two error terms, a relative error
-// term and an absolute error term,
-
-// error_tolerance = rtoll * l2_norm(y) + atoll,
-
-// where rtoll is the relative error tolerance and atoll is the
-// absolute error tolerance. l2_norm(y) is the L2 norm of y.
-
-// By default the relative error tolerance is the square root of
-// matchine epsilon and the maximum error tolerance is the square root
-// of <maximum double value>
-
-// You can also set the relative error tolerance. The relative error
-// tolerance is, by default, 0.01% of the absolute value of the
-// smallest element of y.
-
-// The step size is chosen as
-// dt = (1-safety_margin) * absolute_error_tolerance / estimated_error,
-// Where the estimated error is chosen using the adaptive step size
-// method. Safety keeps the step size a little smaller than the
-// maximum allowed error which might be unstable. By default,
-// safety_margin is 0.1, but you can change it.
-
-// You can also set the maximum step size. By default, it is the
-// square root of the largest double value.
-
-// You can choose how RKF45 outptus the solution after a given
-// time. You can have it set fill a pre-allocated double array
-// or you can have it output a vector.
-
+// For background and usage, see the header file. 
 // ----------------------------------------------------------------------
 
 
@@ -96,7 +18,7 @@
 #include <iomanip> // For manipulating the output.
 #include <float.h> // For machine precision information
 #include <cmath> // for math
-#include <assert.h> // For error checking
+#include <cassert> // For error checking
 #include "rkf45.hpp" // the header for this program
 // Namespace specification. For convenience.
 using std::cout;
@@ -105,13 +27,216 @@ using std::vector;
 using std::ostream;
 using std::istream;
 
+
+// Getters
+// ----------------------------------------------------------------------
+// Returns the total number of steps the integrated has iterated through
+int RKF45::steps() const {
+  return ys.size();
+}
+
+// Finds the error tolerance based on the current state of the system.
+double RKF45::get_error_tolerance() const {
+  return get_relative_error_tolerance() + get_absolute_error();
+}
+
+// Returns the size of the system. Assumes the system stays the same
+// size. If initial data has not yet been set, will return zero.
+int RKF45::size() const {
+  if ( ys.size() > 0 ) {
+    return ys.front().size();
+  }
+  else {
+    return 0;
+  }
+}
+
+// Returns the initial data. Returns an empty vector if no initial
+// data has been set yet. Does NOT pass by reference. If no initial
+// data has been set, returns an empty vector.
+dVector RKF45::get_y0() const {
+  dVector output;
+  if ( size() > 0 ) {
+    output = y0;
+  }
+  return output;
+}
+
+// Returns the start time.
+double RKF45::get_t0() const {
+  return t0;
+}
+
+// Returns true if the system is set to use optional arguments,
+// false otherwise.
+bool RKF45::using_optional_args() const {
+  return use_optional_arguments;
+}
+
+// Returns the optional arguments if they are in use. If they are
+// not in use or if they haven't been set yet, returns an empty
+// array otherwise.
+dVector RKF45::get_optional_args() const {
+  dVector output;
+  if ( using_optional_args() ) {
+    output = optional_args;
+  }
+  return output;
+}
+
+// Returns the maximum step size allowed.
+double RKF45::get_max_dt() const {
+  return max_dt;
+}
+
+// Returns the initial step size.
+double RKF45::get_dt0() const {
+  return dt0;
+}
+
+// Returns the previous step size. If no steps have been performed,
+// returns -1.
+double RKF45::get_last_dt() const {
+  if ( steps() > 0 ) {
+    return last_dt;
+  }
+  else {
+    return -1;
+  }
+}
+
+// Returns the next step size.
+double RKF45::get_next_dt() const {
+  return next_dt;
+}
+
+// Returns the current absolute error
+double RKF45::get_absolute_error() const {
+  return absolute_error;
+}
+
+// Returns the current relative error factor
+double RKF45::get_relative_error_factor() const {
+  return relative_error_factor;
+}
+
+// Returns the safety margin for step-size choice
+double RKF45::get_safety_margin() const {
+  return safety_margin;
+}
+// ----------------------------------------------------------------------
+
+
+// Setters
+// ----------------------------------------------------------------------
+// Sets the function y'=f. One version takes optional arguments. One
+// does not. The second vector is optional arguments.
+void RKF45::set_f(double (*f)(double,const dVector&)) {
+  use_optional_arguments = false;
+  f_no_optional_args = f;
+}
+void RKF45::set_f(double (*f)(double,const dVector&,const dVector&)) {
+  use_optional_arguments = true;
+  f_with_optional_args = f;
+}
+
+// Sets the initial y vector.
+void RKF45::set_y0(const dVector& y0) {
+  this->y0 = y0;
+}
+
+// Sets the start time. Passing in no arguments resets to the
+// default.
+void RKF45::set_t0(double t0) {
+  this->t0 = t0;
+}
+void RKF45::set_t0() {
+  set_t0(DEFAULT_T0);
+}
+
+// Sets the optional arguments. If the function f does not take
+// optional arguments, raises an error.
+void RKF45::set_optional_args(const dVector& optional_args) {
+  assert ( using_optional_args()
+	   && "Set the function to take optional arguments first." );
+  this->optional_args = optional_args;
+}
+
+// Sets the maximum allowed step size. Passing in no arguments
+// resets to the default.
+void RKF45::set_max_dt(double max_dt) {
+  assert ( max_dt > 0 && "Steps must be positive." );
+  this->max_dt = max_dt;
+}
+void RKF45::set_max_dt() {
+  set_max_dt(default_max_dt());
+}
+
+// Sets the initial step size. Passing in no arguments resets to the
+// default.
+void RKF45::set_dt0(double dt0) {
+  assert ( dt0 > 0 && "Steps must be positive." );
+  this->dt0 = dt0;
+}
+
+// Sets the next step size. Use with caution! If you set the next
+// step size, the value chosen automatically is forgotten!
+void RKF45::set_next_dt(double next_dt) {
+  assert (next_dt > 0 && "Steps must be positive." );
+  this->next_dt = next_dt;
+}
+
+// Sets the absolute error. Passing in no arguments resets to the
+// default.
+void RKF45::set_absolute_error(double absolute_error) {
+  assert ( absolute_error > 0 && "Error must be positive." );
+  this->absolute_error = absolute_error;
+}
+void RKF45::set_absolute_error() {
+  set_absolute_error(default_absolute_error());
+}
+
+// Sets the relative error factor. Passing in no arguments resets to
+// the default.
+void RKF45::set_relative_error_factor(double relative_error_factor) {
+  assert ( relative_error_factor > 0 && "Error must be positive." );
+  this->relative_error_factor = relative_error_factor;
+}
+void RKF45::set_relative_error_factor() {
+  set_relative_error_factor(DEFAULT_RELATIVE_ERROR_FACTOR);
+}
+
+// Sets the safety margin for step size choices. Passing in no
+// arguments resets to the default.
+void RKF45::set_safety_margin(double safety_margin) {
+  assert ( safety_margin > 0 && "Error must be positive." );
+  this->safety_margin = safety_margin;
+}
+void RKF45::set_safety_margin() {
+  set_safety_margin(DEFAULT_SAFETY_MARGIN);
+}
+// ----------------------------------------------------------------------
+
+
 // Private methods
 // ----------------------------------------------------------------------
+
+// A convenience function. Sets all the fields to their default values.
+void RKF45::set_defaults() {
+  t0 = DEFAULT_T0;
+  use_optional_arguments = DEFAULT_USE_OPTIONAL_ARGS;
+  max_dt = default_max_dt();
+  dt0 = DEFAULT_DT0;
+  next_dt = dt0;
+  absolute_error = default_absolute_error();
+  relative_error_factor = DEFAULT_RELATIVE_ERROR_FACTOR;
+  safety_margin = DEFAULT_SAFETY_MARGIN;
+}
 
 // A convenience function. Wraps the function f = y'. Depending on
 // whether or not f takes optional arguments does the correct thing.
 double RKF45::f(int t, const dVector& y) const {
-  if ( use_optional_arguments) {
+  if ( using_optional_args() ) {
     return f_with_optional_args(t,y,optional_args);
   }
   else {
@@ -162,10 +287,13 @@ double RKF45::norm(const dVector& v) const {
 // Finds the relative error tolerance based on the current state of
 // the system.
 double RKF45::get_relative_error_tolerance() const {
-  if (ys.size() > 0) {
-    return relative_error_factor * norm(ys.back());
+  if ( ys.size() > 0 ) {
+    return get_relative_error_factor() * norm(ys.back());
   }
   else {
-    return relative_error_factor * norm(y0);
+    return get_relative_error_factor() * norm(y0);
   }
 }
+
+
+

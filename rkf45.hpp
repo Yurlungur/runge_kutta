@@ -1,7 +1,7 @@
 // rkf45.hpp
 
 // Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-// Time-stamp: <2013-10-14 14:43:18 (jonah)>
+// Time-stamp: <2013-10-14 18:00:39 (jonah)>
 
 // This is the prototype for my implementation of the 4-5
 // Runge-Kutta-Feldberg adaptive step size integrator. For simplicity,
@@ -218,14 +218,41 @@ public: // Constructors, destructors, and assignment operators.
 
 public: // Public interface
 
+  // Default values
+  // ----------------------------------------------------------------------
+  static const double DEFAULT_T0 = 0; // Default initial t data
+  // Default for whether or not we use a function with optional
+  // arguments
+  static const bool DEFAULT_USE_OPTIONAL_ARGS = false;
+  // Default initial step size.
+  static const double DEFAULT_DT0 = 0.01;
+  // The last step size needs a value before any steps have been
+  // taken. We set it to minus 1.
+  static const double LAST_STEP_SIZE_NO_STEPS_TAKEN = -1;
+  // Default relative error factor
+  static const double DEFAULT_RELATIVE_ERROR_FACTOR = 0.001;
+  // Default safety factor for step size choices. Shrinks the step
+  // size slightly for safety.
+  static const double DEFAULT_SAFETY_MARGIN = 0.1;
+
+  // defaults that have to be called because they're platform-dependent
+  static double default_max_dt() {
+    return sqrt(DBL_MAX);
+  }
+  static double default_absolute_error() {
+    return sqrt(DBL_EPSILON);
+  }
+  // ----------------------------------------------------------------------
+
+
   // Getters 
   // ----------------------------------------------------------------------
   // Finds the error tolerance based on the current state of the system.
   double get_error_tolerance() const;
 
   // Returns the size of the system. Assumes the system stays the same
-  // size. If initial data has not yet been set, may return zero.
-  double size() const;
+  // size. If initial data has not yet been set, will return zero.
+  int size() const;
 
   // Returns the initial data. Returns an empty vector if no
   // initial data has been set yet. Does NOT pass by reference.
@@ -269,9 +296,9 @@ public: // Public interface
   // Setters
   // ----------------------------------------------------------------------
   // Sets the function y'=f. One version takes optional arguments. One
-  // does not. The second vector is optional arguments.
-  void set_f(double (*f)(const dVector&));
-  void set_f(double (*f)(const dVector&,const dVector&));
+  // does not. The second vector is optional arguments. 
+  void set_f(double (*f)(double,const dVector&));
+  void set_f(double (*f)(double,const dVector&,const dVector&));
 
   // Sets the initial y vector.
   void set_y0(const dVector& y0);
@@ -318,7 +345,7 @@ public: // Public interface
   // Data output
   // ----------------------------------------------------------------------
   // Returns the total number of steps the integrated has iterated through
-  int get_num_steps() const;
+  int steps() const;
 
   // Returns the current time step.
   double get_t() const;
@@ -401,25 +428,6 @@ private: // Implementation details
   // Private fields.
   // ----------------------------------------------------------------------
 
-  // Default values
-  static const double DEFAULT_T0 = 0; // Default initial t data
-  // Default for whether or not we use a function with optional
-  // arguments
-  static const bool DEFAULT_USE_OPTIONAL_ARGS = false;
-  // Default maximum step size. 
-  static const double DEFAULT_MAX_DT = 1E100;
-  // Default initial step size.
-  static const double DEFAULT_DT0 = 0.01;
-  // The last step size needs a value before any steps have been
-  // taken. We set it to minus 1.
-  static const double LAST_STEP_SIZE_NO_STEPS_TAKEN = -1;
-  // Default relative error factor
-  static const double DEFAULT_RELATIVE_ERROR_FACTOR = 0.001;
-  // Default safety factor for step size choices. Shrinks the step
-  // size slightly for safety.
-  static const double DEFAULT_SAFETY_MARGIN = 0.1;
-  // Default value for the absolute error
-  static const double DEFAULT_ABSOLUTE_ERROR = 0.0003;
 
   // The pointer to the function f.
   // f(double t, const dVector& y,const dVector& optional_args)
@@ -465,6 +473,9 @@ private: // Implementation details
   
   // Private methods
   // ----------------------------------------------------------------------
+
+  // A convenience function. Sets all the fields to their default values.
+  void set_defaults();
   
   // A convenience function. Wraps the function f = y'. Depending on
   // whether or not f takes optional arguments does the correct thing.
