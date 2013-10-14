@@ -1,7 +1,7 @@
 // rkf45.hpp
 
 // Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-// Time-stamp: <2013-10-13 21:10:07 (jonah)>
+// Time-stamp: <2013-10-14 14:43:18 (jonah)>
 
 // This is the prototype for my implementation of the 4-5
 // Runge-Kutta-Feldberg adaptive step size integrator. For simplicity,
@@ -99,11 +99,16 @@
 #include <float.h> // For machine precision information
 #include <cmath> // for math
 // Namespace specification. For convenience.
-using namespace std;
+using std::cout;
+using std::endl;
+using std::vector;
+using std::ostream;
+using std::istream;
+using std::sqrt;
 
 // We use the dVector type a lot, so let's define a type for it
 // to make things more readable.
-typedef dVector dVector;
+typedef vector<double> dVector;
 
 // Bundles together the background methods and relevant variables for
 // the 4-5 Runge-Kutta-Feldberg algorithm. I guess the best thing to
@@ -175,7 +180,7 @@ public: // Constructors, destructors, and assignment operators.
   // relative error tolerance relative_tolerance, and absolute error
   // tolerance absolute_tolerance.  f(t,y) = f(t,y,optional_args).
   RKF45(double (*y)(double,const dVector&,const dVector&),
-	const dVector& y0, const dVector optional_args&,
+	const dVector& y0, const dVector& optional_args,
 	double delta_t0,
 	double relative_tolerance, double absolute_tolerance);
 
@@ -190,7 +195,7 @@ public: // Constructors, destructors, and assignment operators.
   // f(t,y) = f(t,y,optional_args). The error tolerance is the
   // default.
   RKF45(double (*y)(double,const dVector&,const dVector&),
-	double t0, const dVector& y0[], const dVector& optional_args,
+	double t0, const dVector y0[], const dVector& optional_args,
 	double delta_t0);
 
   // Creates an integrator of the ode system with y'=f(t,y), initial
@@ -208,7 +213,7 @@ public: // Constructors, destructors, and assignment operators.
   ~RKF45();
 
   // Assignment operator. Copies one obje ct into another.
-  friend RKF45& operator = (const RKF45 &integrator);
+  RKF45& operator = (const RKF45 &integrator);
 
 
 public: // Public interface
@@ -397,22 +402,24 @@ private: // Implementation details
   // ----------------------------------------------------------------------
 
   // Default values
-  const double DEFAULT_T0 = 0; // Default initial t data
+  static const double DEFAULT_T0 = 0; // Default initial t data
   // Default for whether or not we use a function with optional
   // arguments
-  const bool DEFAULT_USE_OPTIONAL_ARGS = false;
+  static const bool DEFAULT_USE_OPTIONAL_ARGS = false;
   // Default maximum step size. 
-  const double DEFAULT_MAX_DT = sqrt(DBL_MAX);
+  static const double DEFAULT_MAX_DT = 1E100;
   // Default initial step size.
-  const double DEFAULT_DT0 = 0.01;
+  static const double DEFAULT_DT0 = 0.01;
   // The last step size needs a value before any steps have been
   // taken. We set it to minus 1.
-  const double LAST_STEP_SIZE_NO_STEPS_TAKEN = -1;
+  static const double LAST_STEP_SIZE_NO_STEPS_TAKEN = -1;
   // Default relative error factor
-  const double DEFAULT_RELATIVE_ERROR_FACTOR = 0.001;
+  static const double DEFAULT_RELATIVE_ERROR_FACTOR = 0.001;
   // Default safety factor for step size choices. Shrinks the step
   // size slightly for safety.
-  const double DEFAULT_SAFETY_MARGIN = 0.1;
+  static const double DEFAULT_SAFETY_MARGIN = 0.1;
+  // Default value for the absolute error
+  static const double DEFAULT_ABSOLUTE_ERROR = 0.0003;
 
   // The pointer to the function f.
   // f(double t, const dVector& y,const dVector& optional_args)
@@ -422,33 +429,33 @@ private: // Implementation details
 
   // Initial conditions.
   dVector y0; // initial y-data
-  double t0 = DEFAULT_T0; // Initial t-data.
+  double t0; // = DEFAUL_T0; // Initial t-data.
 
   // Optional arguments
   // Whether or not we use a function with optional arguments
-  bool use_optional_arguments = DEFAULT_USE_OPTIONAL_ARGS;
+  bool use_optional_arguments; // = DEFAULT_USE_OPTIONAL_ARGS;
   dVector optional_args;
 
   // Step-size data
   // The maximum step size.
-  double max_dt = DEFAULT_MAX_DT;
+  double max_dt;// = DEFAULT_MAX_DT;
   // The initial step size. This has a default value, but you should
   // really put it in by hand. Note that if you set your max step size
   // but not your delta_t0, you might run into trouble if your max
   // step size is smaller than delta_t0.
-  double dt0 = DEFAULT_DT0;
+  double dt0; // = DEFAULT_DT0;
   // The last step size. This is what we used in the most recent
   // step. 
-  double last_dt = LAST_STEP_SIZE_NO_STEPS_TAKEN;
+  double last_dt; // = LAST_STEP_SIZE_NO_STEPS_TAKEN;
   // The next step size. This is calculated during a step.
-  double next_dt = dt0;
+  double next_dt; // = dt0;
 
   // Error tolerance values.
-  double absolute_error = sqrt(FLT_EPSILON);
+  double absolute_error;// = DEFAULT_ABSOLUTE_ERROR;
   // Relative error is relative_error_factor * min(abs(y))
-  double relative_error_factor = DEFAULT_RELATIVE_ERROR_FACTOR;
+  double relative_error_factor;// = DEFAULT_RELATIVE_ERROR_FACTOR;
   // The safety margin for step-size choice
-  double safety_margin = DEFAULT_SAFETY_MARGIN;
+  double safety_margin;// = DEFAULT_SAFETY_MARGIN;
 
   // These fields keep track of the system over many
   // timesteps. They're used to keep track of the current state of the
@@ -467,14 +474,19 @@ private: // Implementation details
   // the system.
   double get_relative_error_tolerance() const;
 
-  // Calculates the L2 norm of the vector v
-  double l2_norm(dVector& v);
+  // Calculates the 2-norm of the vector v
+  double norm(const dVector& v) const;
 
-  // Adds two dVectors a and b and outputs a new dVector that is their sum.
-  dVector sum(dVector& a, dVector& b);
+  // Adds two dVectors a and b and outputs a new dVector that is their
+  // sum. Assumes that the vectors are the same size. If they're not,
+  // raises an error.
+  dVector sum(const dVector& a, const dVector& b) const;
+
+  // Calculuates the sum of all elements in a dVector.
+  double sum(const dVector& v) const;
 
   // Takes the scalar product of a dVector v with a scalar k
-  dVector scalar_product(double k, dVector& v);
+  dVector scalar_product(double k, const dVector& v) const;
 
 };
 
