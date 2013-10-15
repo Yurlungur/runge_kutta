@@ -1,7 +1,7 @@
 // rkf45.hpp
 
 // Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-// Time-stamp: <2013-10-14 23:29:26 (jonah)>
+// Time-stamp: <2013-10-15 01:13:50 (jonah)>
 
 // This is the prototype for my implementation of the 4-5
 // Runge-Kutta-Feldberg adaptive step size integrator. For simplicity,
@@ -106,6 +106,7 @@ using std::vector;
 using std::ostream;
 using std::istream;
 using std::sqrt;
+using std::abs;
 
 // We use the dVector type a lot, so let's define a type for it
 // to make things more readable.
@@ -116,21 +117,22 @@ typedef vector<double> dVector;
 // The a matrix in a butcher-tableau is lower-triangular, so the
 // upper triangular bit is set to zero. It's not used anyway.
 // BUTCHER_A stands for BUTCHER_TABLEAU_A
-const double BUTCHER_A[5][5] =
-  { { 1.0/4,        0.,          0.,          0.,          0. },
-    { 3.0/32,       9.0/32,      0.,          0.,          0. },
-    { 1932.0/2197, -7200.0/2197, 7296.0/2197, 0.,          0. },
-    { 439.0/216,   -8.0,         3680.0/513,  -845.0/4104, 0. },
-    { -8.0/27,      2.0,        -3544.0/2565, 1859.0/4104, -11.0/40 } };
+const double BUTCHER_A[6][6] =
+  { { 0,            0,           0,            0,           0,       0 },
+    { 1.0/4,        0,           0,            0,           0,       0 },
+    { 3.0/32,       9.0/32,      0,            0,           0,       0 },
+    { 1932.0/2197, -7200.0/2197, 7296.0/2197,  0,           0,       0 },
+    { 439.0/216,   -8.0,         3680.0/513,  -845.0/4104,  0,       0 },
+    { -8.0/27,      2.0,        -3544.0/2565, 1859.0/4104, -11.0/40, 0 } };
 
 // The b coefficients for the Butcher tableau have two sets. The first
 // row is for the fifcth-order accurate piece. The second row is for
 // the fourth-order accurate piece.
 const double BUTCHER_B[][6] =
   { { 16.0/135, 0, 6656.0/12825, 28561.0/56430, -9.0/50, 2.0/55 },
-    { 25.0/216, 0, 1408.0/2565,  2197.0/4104,   -1.0/5,  0.     } };
+    { 25.0/216, 0, 1408.0/2565,  2197.0/4104,   -1.0/5,  0      } };
 
-const double BUTCHER_C[] = { 0.0, 1.0/4, 3.0/8, 12.0/13, 1.0, 1.0/2 };
+const double BUTCHER_C[] = { 0, 1.0/4, 3.0/8, 12.0/13, 1.0, 1.0/2 };
 
 
 // A container class to pass the fucntion. If you absolutely must
@@ -145,9 +147,9 @@ public:
 
   // The pointer to the function f.
   // f(double t, const dVector& y,const dVector& optional_args)
-  double (*f_with_optional_args)(double,const dVector&, const dVector&);
+  dVector (*f_with_optional_args)(double,const dVector&, const dVector&);
   // f(double t, const dVector& y)
-  double (*f_no_optional_args)(double,const dVector&);
+  dVector (*f_no_optional_args)(double,const dVector&);
   // Whether or not we use a function with optional arguments
   bool use_optional_arguments; // = DEFAULT_USE_OPTIONAL_ARGS;
 };
@@ -165,17 +167,17 @@ public: // Constructors, destructors, and assignment operators.
   // Creates an integrator for the ode system with y'=f(t,y).  The other
   // properties are assumed to be set by setter methods. The size of
   // the vector is assumed to be appropriate.
-  RKF45(double (*y)(double,const dVector&));
+  RKF45(dVector (*y)(double,const dVector&));
 
   // Creates an integrator for the ode system with y'=f(t,y), where
   // f(t,y) = f(t,y,optional_args). The size of the vectors is assumed
   // to be appropriate.
-  RKF45(double (*y)(double,const dVector&,const dVector&));
+  RKF45(dVector (*y)(double,const dVector&,const dVector&));
 
   // Creates an integrator for an ode system with y'=f(t,y), with
   // initial time t0 and initial conditions y0. The size of the system
   // is inferred from the size of the initial conditions vector.
-  RKF45(double (*y)(double, const dVector&), double t0,
+  RKF45(dVector (*y)(double, const dVector&), double t0,
 	const dVector& y0);
 
   // Creates an integrator for an ode system with
@@ -183,7 +185,7 @@ public: // Constructors, destructors, and assignment operators.
   // conditions y0. The size of the system is inferred from the size
   // of the initial conditions vector. The optional_args are passed in
   // now too. The size is inferred from the input vector.
-  RKF45(double (*y)(double,const dVector&,const dVector&),
+  RKF45(dVector (*y)(double,const dVector&,const dVector&),
 	double t0, const dVector& y0,
 	const dVector& optional_args);
 
@@ -192,7 +194,7 @@ public: // Constructors, destructors, and assignment operators.
   // relative error tolerance relative_tolerance, and absolute error
   // tolerance absolute_tolerance. The dimension of the system is
   // inferred from the size of y0.
-  RKF45(double (*y)(double,const dVector&),
+  RKF45(dVector (*y)(double,const dVector&),
 	double t0, const dVector& y0,
 	double delta_t0, double relative_tolerance,
 	double absolute_tolerance);
@@ -202,7 +204,7 @@ public: // Constructors, destructors, and assignment operators.
   // relative error tolerance relative_tolerance, and absolute error
   // tolerance absolute_tolerance. The size of the system is inferred
   // from the initial data.
-  RKF45(double (*y)(double,const dVector&),
+  RKF45(dVector (*y)(double,const dVector&),
 	const dVector& y0, double delta_t0,
 	double relative_tolerance, double absolute_tolerance);
   
@@ -213,7 +215,7 @@ public: // Constructors, destructors, and assignment operators.
   // f(t,y,optional_args). There are m-optional arguments. The
   // dimension of the system and the number of optional arguments are
   // inferred from size of the vectors.
-  RKF45(double (*y)(double, const dVector&,const dVector&),
+  RKF45(dVector (*y)(double, const dVector&,const dVector&),
 	double t0,
 	const dVector& y0, const dVector& optional_args,
 	double delta_t0,
@@ -223,7 +225,7 @@ public: // Constructors, destructors, and assignment operators.
   // time t0=0, initial conditions y0, initial step size delta_t0,
   // relative error tolerance relative_tolerance, and absolute error
   // tolerance absolute_tolerance.  f(t,y) = f(t,y,optional_args).
-  RKF45(double (*y)(double,const dVector&,const dVector&),
+  RKF45(dVector (*y)(double,const dVector&,const dVector&),
 	const dVector& y0, const dVector& optional_args,
 	double delta_t0,
 	double relative_tolerance, double absolute_tolerance);
@@ -231,14 +233,14 @@ public: // Constructors, destructors, and assignment operators.
   // Creates an integrator of an ode system with y'=f(t,y), initial
   // time t0, initial conditions y0, and initial step size
   // delta_t0. The error tolerance is the default error tolerance.
-  RKF45(double (*y)(double,const dVector&),
+  RKF45(dVector (*y)(double,const dVector&),
 	double t0, const dVector y0, double delta_t0);
 
   // Creates an integrator of the ode system with y'=f(t,y), initial
   // time t0, initial conditions y0, initial step size delta_t0.
   // f(t,y) = f(t,y,optional_args). The error tolerance is the
   // default. f(t,y) = f(t,y,optional_args)
-  RKF45(double (*y)(double,const dVector&,const dVector&),
+  RKF45(dVector (*y)(double,const dVector&,const dVector&),
 	double t0, const dVector& y0, const dVector& optional_args,
 	double delta_t0);
 
@@ -260,6 +262,10 @@ public: // Public interface
 
   // Default values
   // ----------------------------------------------------------------------
+  // The one plus the error order of the method. Remember that RKF45
+  // is 5th order error estimation, although the solution is only 4th
+  // order!
+  static const int ORDER = 6; // 5+1
   static const double DEFAULT_T0 = 0; // Default initial t data
   // Default for whether or not we use a function with optional
   // arguments
@@ -346,8 +352,8 @@ public: // Public interface
   // ----------------------------------------------------------------------
   // Sets the function y'=f. One version takes optional arguments. One
   // does not. The second vector is optional arguments. 
-  void set_f(double (*f)(double,const dVector&));
-  void set_f(double (*f)(double,const dVector&,const dVector&));
+  void set_f(dVector (*f)(double,const dVector&));
+  void set_f(dVector (*f)(double,const dVector&,const dVector&));
   // Uses Functor definition
   void set_f(Functor f_func);
 
@@ -477,11 +483,8 @@ public: // Public interface
   // by set_next_dt.
   void integrate(double t_final);
 
-  // Resets the integrator to time t_initial. If no initial time is
-  // supplied, resets the integrator to the initial time set when the
-  // user set the initial data. This is useful for approaches like the
-  // shooting method.
-  void reset(double t_initial);
+  // Resets the integrator to t0. This is useful for approaches like
+  // the shooting method.
   void reset();
 
 private: // Implementation details
@@ -492,9 +495,9 @@ private: // Implementation details
 
   // The pointer to the function f.
   // f(double t, const dVector& y,const dVector& optional_args)
-  double (*f_with_optional_args)(double,const dVector&, const dVector&);
+  dVector (*f_with_optional_args)(double,const dVector&, const dVector&);
   // f(double t, const dVector& y)
-  double (*f_no_optional_args)(double,const dVector&);
+  dVector (*f_no_optional_args)(double,const dVector&);
 
   // Initial conditions.
   dVector y0; // initial y-data
@@ -540,7 +543,7 @@ private: // Implementation details
   
   // A convenience function. Wraps the function f = y'. Depending on
   // whether or not f takes optional arguments does the correct thing.
-  double f(int t, const dVector& y) const;
+  dVector f(int t, const dVector& y) const;
 
   // Finds the relative error tolerance based on the current state of
   // the system.

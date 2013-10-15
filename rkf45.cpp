@@ -1,7 +1,7 @@
 // rkf45.cpp
 
 // Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-// Time-stamp: <2013-10-14 23:31:05 (jonah)>
+// Time-stamp: <2013-10-15 01:13:57 (jonah)>
 
 // This is my implementation of the 4-5 Runge-Kutta-Feldberg adaptive
 // step size integrator. For simplicity, and so that I can bundle
@@ -26,6 +26,7 @@ using std::endl;
 using std::vector;
 using std::ostream;
 using std::istream;
+using std::abs;
 
 
 // Constructors
@@ -38,7 +39,7 @@ RKF45::RKF45() {
 // Creates an integrator for the ode system with y'=f(t,y).  The other
 // properties are assumed to be set by setter methods. The size of
 // the vector is assumed to be appropriate.
-RKF45::RKF45(double (*y)(double,const dVector&)) {
+RKF45::RKF45(dVector (*y)(double,const dVector&)) {
   set_defaults();
   set_f(y);
 }
@@ -46,7 +47,7 @@ RKF45::RKF45(double (*y)(double,const dVector&)) {
 // Creates an integrator for the ode system with y'=f(t,y), where
 // f(t,y) = f(t,y,optional_args). The size of the vectors is assumed
 // to be appropriate.
-RKF45::RKF45(double (*y)(double,const dVector&,const dVector&)) {
+RKF45::RKF45(dVector (*y)(double,const dVector&,const dVector&)) {
   set_defaults();
   set_f(y);
 }
@@ -54,7 +55,7 @@ RKF45::RKF45(double (*y)(double,const dVector&,const dVector&)) {
 // Creates an integrator for an ode system with y'=f(t,y), with
 // initial time t0 and initial conditions y0. The size of the system
 // is inferred from the size of the initial conditions vector.
-RKF45::RKF45(double (*y)(double, const dVector&), double t0,
+RKF45::RKF45(dVector (*y)(double, const dVector&), double t0,
 	     const dVector& y0) {
   set_defaults();
   set_f(y);
@@ -67,7 +68,7 @@ RKF45::RKF45(double (*y)(double, const dVector&), double t0,
 // conditions y0. The size of the system is inferred from the size
 // of the initial conditions vector. The optional_args are passed in
 // now too. The size is inferred from the input vector.
-RKF45::RKF45(double (*y)(double,const dVector&,const dVector&),
+RKF45::RKF45(dVector (*y)(double,const dVector&,const dVector&),
 	     double t0, const dVector& y0,
 	     const dVector& optional_args) {
   set_defaults();
@@ -82,7 +83,7 @@ RKF45::RKF45(double (*y)(double,const dVector&,const dVector&),
 // relative error tolerance relative_tolerance, and absolute error
 // tolerance absolute_tolerance. The dimension of the system is
 // inferred from the size of y0.
-RKF45::RKF45(double (*y)(double,const dVector&),
+RKF45::RKF45(dVector (*y)(double,const dVector&),
 	     double t0, const dVector& y0,
 	     double delta_t0, double relative_tolerance,
 	     double absolute_tolerance) {
@@ -100,7 +101,7 @@ RKF45::RKF45(double (*y)(double,const dVector&),
 // relative error tolerance relative_tolerance, and absolute error
 // tolerance absolute_tolerance. The size of the system is inferred
 // from the initial data.
-RKF45::RKF45(double (*y)(double,const dVector&),
+RKF45::RKF45(dVector (*y)(double,const dVector&),
 	     const dVector& y0, double delta_t0,
 	     double relative_tolerance, double absolute_tolerance) {
   set_defaults();
@@ -118,7 +119,7 @@ RKF45::RKF45(double (*y)(double,const dVector&),
 // f(t,y,optional_args). There are m-optional arguments. The
 // dimension of the system and the number of optional arguments are
 // inferred from size of the vectors.
-RKF45::RKF45(double (*y)(double, const dVector&,const dVector&),
+RKF45::RKF45(dVector (*y)(double, const dVector&,const dVector&),
 	     double t0,
 	     const dVector& y0, const dVector& optional_args,
 	     double delta_t0,
@@ -137,7 +138,7 @@ RKF45::RKF45(double (*y)(double, const dVector&,const dVector&),
 // time t0=0, initial conditions y0, initial step size delta_t0,
 // relative error tolerance relative_tolerance, and absolute error
 // tolerance absolute_tolerance.  f(t,y) = f(t,y,optional_args).
-RKF45::RKF45(double (*y)(double,const dVector&,const dVector&),
+RKF45::RKF45(dVector (*y)(double,const dVector&,const dVector&),
 	     const dVector& y0, const dVector& optional_args,
 	     double delta_t0,
 	     double relative_tolerance, double absolute_tolerance) {
@@ -153,7 +154,7 @@ RKF45::RKF45(double (*y)(double,const dVector&,const dVector&),
 // Creates an integrator of an ode system with y'=f(t,y), initial
 // time t0, initial conditions y0, and initial step size
 // delta_t0. The error tolerance is the default error tolerance.
-RKF45::RKF45(double (*y)(double,const dVector&),
+RKF45::RKF45(dVector (*y)(double,const dVector&),
 	     double t0, const dVector y0, double delta_t0) {
   set_defaults();
   set_f(y);
@@ -167,7 +168,7 @@ RKF45::RKF45(double (*y)(double,const dVector&),
 // time t0, initial conditions y0, initial step size delta_t0.
 // f(t,y) = f(t,y,optional_args). The error tolerance is the
 // default. f(t,y) = f(t,y,optional_args)
-RKF45::RKF45(double (*y)(double,const dVector&,const dVector&),
+RKF45::RKF45(dVector (*y)(double,const dVector&,const dVector&),
 	     double t0, const dVector& y0, const dVector& optional_args,
 	     double delta_t0) {
   set_defaults();
@@ -339,11 +340,11 @@ double RKF45::get_safety_margin() const {
 // ----------------------------------------------------------------------
 // Sets the function y'=f. One version takes optional arguments. One
 // does not. The second vector is optional arguments.
-void RKF45::set_f(double (*f)(double,const dVector&)) {
+void RKF45::set_f(dVector (*f)(double,const dVector&)) {
   use_optional_arguments = false;
   f_no_optional_args = f;
 }
-void RKF45::set_f(double (*f)(double,const dVector&,const dVector&)) {
+void RKF45::set_f(dVector (*f)(double,const dVector&,const dVector&)) {
   use_optional_arguments = true;
   f_with_optional_args = f;
 }
@@ -566,7 +567,80 @@ ostream& operator <<(ostream& out, const RKF45& in) {
   in.print(out);
   return out;
 }
+// ----------------------------------------------------------------------
 
+
+// integration control
+// ----------------------------------------------------------------------
+// Integrates by a single time step. The time step is either chosen
+// internally from the last integration step or set by set_dt0 or
+// set_next_dt.
+void RKF45::step() {
+  // Some local variables for convenience
+  double t = ts.back();
+  double h = get_next_dt();
+  dVector y_of_t = ys.back();
+  dVector y;
+
+  // The new orders for the dynamic step size
+  dVector y_new_order4 = y_of_t;
+  dVector y_new_order5 = y_of_t;
+  double new_step_size;
+  
+  // This is the doozy. First we need to compute the five k
+  // factors. The indexing scheme is off by 1 from the
+  // standard. Subtract 1 for the index if you're reading off of
+  // wikipedia.
+  dVector k[ORDER];
+  for (int i = 0; i < ORDER; i++) {
+    y = y_of_t;
+    for (int j = 0; j < i; j++) {
+      if ( BUTCHER_A[i][j] != 0 ) {
+	y = sum(y,scalar_product(BUTCHER_A[i][j],k[j]));
+      }
+    }
+    if ( BUTCHER_C[i] != 0 ) {
+      k[i] = scalar_product(h,f(t+BUTCHER_C[i]*h,y));
+    }
+    else {
+      k[i] = scalar_product(h,f(t,y));
+    }
+  }
+
+  // Now we can safely compute the new y values.
+  for (int i = 0; i < ORDER; i++) {
+    y_new_order4 = sum(y_new_order4,scalar_product(BUTCHER_B[0][i],k[i]));
+    y_new_order5 = sum(y_new_order5,scalar_product(BUTCHER_B[1][i],k[i]));
+  }
+
+  // Then we can compute the next step size
+  new_step_size = ( get_safety_margin() * h * get_error_tolerance() )
+    / norm(difference(y_new_order5, y_new_order4));
+
+  // Finally, set the next step size, set y and t, and end.
+  set_next_dt(new_step_size);
+  ts.push_back(t+h);
+  ys.push_back(y_new_order4);
+}
+
+// Integrates up to to time t_final. If the current time is after
+// t_final, does nothing. The initial step size is set by set_dt0 or
+// by set_next_dt.
+void RKF45::integrate(double t_final) {
+  while ( ts.back() < t_final ) {
+    step();
+  }
+}
+
+// Resets the integrator to t0. This is useful for approaches like
+// the shooting method.
+void RKF45::reset() {
+  ys.resize(1);
+  ys[0] = y0;
+  ts.resize(1);
+  ts[0] = t0;
+  set_next_dt(get_dt0());
+}
 
 // ----------------------------------------------------------------------
 
@@ -588,7 +662,7 @@ void RKF45::set_defaults() {
 
 // A convenience function. Wraps the function f = y'. Depending on
 // whether or not f takes optional arguments does the correct thing.
-double RKF45::f(int t, const dVector& y) const {
+dVector RKF45::f(int t, const dVector& y) const {
   if ( using_optional_args() ) {
     return f_with_optional_args(t,y,optional_args);
   }
@@ -641,7 +715,7 @@ double RKF45::sum(const dVector& v) const {
 double RKF45::norm(const dVector& v) const {
   double output = sum(v);
   output /= v.size();
-  return output;
+  return abs(output);
 }
 
 // Finds the relative error tolerance based on the current state of
