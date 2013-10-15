@@ -1,7 +1,7 @@
 // rkf45.cpp
 
 // Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-// Time-stamp: <2013-10-15 01:13:57 (jonah)>
+// Time-stamp: <2013-10-15 01:43:37 (jonah)>
 
 // This is my implementation of the 4-5 Runge-Kutta-Feldberg adaptive
 // step size integrator. For simplicity, and so that I can bundle
@@ -609,8 +609,8 @@ void RKF45::step() {
 
   // Now we can safely compute the new y values.
   for (int i = 0; i < ORDER; i++) {
-    y_new_order4 = sum(y_new_order4,scalar_product(BUTCHER_B[0][i],k[i]));
-    y_new_order5 = sum(y_new_order5,scalar_product(BUTCHER_B[1][i],k[i]));
+    y_new_order4 = sum(y_new_order4,scalar_product(BUTCHER_B[1][i],k[i]));
+    y_new_order5 = sum(y_new_order5,scalar_product(BUTCHER_B[0][i],k[i]));
   }
 
   // Then we can compute the next step size
