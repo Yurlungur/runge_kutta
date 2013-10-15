@@ -1,7 +1,7 @@
 // rkf45.hpp
 
 // Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-// Time-stamp: <2013-10-14 18:00:39 (jonah)>
+// Time-stamp: <2013-10-14 23:29:26 (jonah)>
 
 // This is the prototype for my implementation of the 4-5
 // Runge-Kutta-Feldberg adaptive step size integrator. For simplicity,
@@ -90,6 +90,7 @@
 // ----------------------------------------------------------------------
 
 
+
 // Include guard
 # pragma once
 // Includes
@@ -109,6 +110,48 @@ using std::sqrt;
 // We use the dVector type a lot, so let's define a type for it
 // to make things more readable.
 typedef vector<double> dVector;
+
+
+// The Butcher Tableau for the Runge-Kutta Fehlberg Method
+// The a matrix in a butcher-tableau is lower-triangular, so the
+// upper triangular bit is set to zero. It's not used anyway.
+// BUTCHER_A stands for BUTCHER_TABLEAU_A
+const double BUTCHER_A[5][5] =
+  { { 1.0/4,        0.,          0.,          0.,          0. },
+    { 3.0/32,       9.0/32,      0.,          0.,          0. },
+    { 1932.0/2197, -7200.0/2197, 7296.0/2197, 0.,          0. },
+    { 439.0/216,   -8.0,         3680.0/513,  -845.0/4104, 0. },
+    { -8.0/27,      2.0,        -3544.0/2565, 1859.0/4104, -11.0/40 } };
+
+// The b coefficients for the Butcher tableau have two sets. The first
+// row is for the fifcth-order accurate piece. The second row is for
+// the fourth-order accurate piece.
+const double BUTCHER_B[][6] =
+  { { 16.0/135, 0, 6656.0/12825, 28561.0/56430, -9.0/50, 2.0/55 },
+    { 25.0/216, 0, 1408.0/2565,  2197.0/4104,   -1.0/5,  0.     } };
+
+const double BUTCHER_C[] = { 0.0, 1.0/4, 3.0/8, 12.0/13, 1.0, 1.0/2 };
+
+
+// A container class to pass the fucntion. If you absolutely must
+// extract the function pointer you set. Mostly used for the copy
+// operator.
+class Functor {
+public:
+  // Constructor
+  Functor() {}
+  // Destructor
+  ~Functor() {}
+
+  // The pointer to the function f.
+  // f(double t, const dVector& y,const dVector& optional_args)
+  double (*f_with_optional_args)(double,const dVector&, const dVector&);
+  // f(double t, const dVector& y)
+  double (*f_no_optional_args)(double,const dVector&);
+  // Whether or not we use a function with optional arguments
+  bool use_optional_arguments; // = DEFAULT_USE_OPTIONAL_ARGS;
+};
+
 
 // Bundles together the background methods and relevant variables for
 // the 4-5 Runge-Kutta-Feldberg algorithm. I guess the best thing to
@@ -141,7 +184,8 @@ public: // Constructors, destructors, and assignment operators.
   // of the initial conditions vector. The optional_args are passed in
   // now too. The size is inferred from the input vector.
   RKF45(double (*y)(double,const dVector&,const dVector&),
-	const dVector& y0, const dVector& optional_args);
+	double t0, const dVector& y0,
+	const dVector& optional_args);
 
   // Creates an integrator of an ode system with y'=f(t,y), initial
   // time t0, initial conditions y0, initial step size delta_t0,
@@ -193,26 +237,22 @@ public: // Constructors, destructors, and assignment operators.
   // Creates an integrator of the ode system with y'=f(t,y), initial
   // time t0, initial conditions y0, initial step size delta_t0.
   // f(t,y) = f(t,y,optional_args). The error tolerance is the
-  // default.
-  RKF45(double (*y)(double,const dVector&,const dVector&),
-	double t0, const dVector y0[], const dVector& optional_args,
-	double delta_t0);
-
-  // Creates an integrator of the ode system with y'=f(t,y), initial
-  // time t0, initial conditions y0, initial step size delta_t0.
-  // f(t,y) = f(t,y,optional_args). The error tolerance is the
   // default. f(t,y) = f(t,y,optional_args)
   RKF45(double (*y)(double,const dVector&,const dVector&),
 	double t0, const dVector& y0, const dVector& optional_args,
 	double delta_t0);
 
-  // Copy constructor. Generates an exact copy of an integrator.
+  // Copy constructor. Generates a copy of the integrator as it was
+  // before the first step was made. Includes all initial data. Useful
+  // for the shooting method.
   RKF45(const RKF45 &integrator);
 
   // Destructor.
   ~RKF45();
 
-  // Assignment operator. Copies one obje ct into another.
+  // Assignment operator. Copies one object into another like the copy
+  // constructor. Useful for the shooting method. Only copies initial
+  // data. Integration data is not copied.
   RKF45& operator = (const RKF45 &integrator);
 
 
@@ -242,6 +282,9 @@ public: // Public interface
   static double default_absolute_error() {
     return sqrt(DBL_EPSILON);
   }
+
+  
+
   // ----------------------------------------------------------------------
 
 
@@ -253,6 +296,10 @@ public: // Public interface
   // Returns the size of the system. Assumes the system stays the same
   // size. If initial data has not yet been set, will return zero.
   int size() const;
+
+  // Returns a container class containing the function and whether or
+  // not optional arguments are in use.
+  Functor get_f() const;
 
   // Returns the initial data. Returns an empty vector if no
   // initial data has been set yet. Does NOT pass by reference.
@@ -292,13 +339,17 @@ public: // Public interface
   // Returns the safety margin for step-size choice
   double get_safety_margin() const;
 
+  // Returns the function in a special wrapper.
   
+
   // Setters
   // ----------------------------------------------------------------------
   // Sets the function y'=f. One version takes optional arguments. One
   // does not. The second vector is optional arguments. 
   void set_f(double (*f)(double,const dVector&));
   void set_f(double (*f)(double,const dVector&,const dVector&));
+  // Uses Functor definition
+  void set_f(Functor f_func);
 
   // Sets the initial y vector.
   void set_y0(const dVector& y0);
@@ -377,22 +428,32 @@ public: // Public interface
   // Tests whether or not a given set of constraints is
   // satisfied. Takes a boolean function of the vector y and tests
   // whether y(t) satisfies the constraint function. This is the fast,
-  // safe solution to the problem of monitoring constriants.
-  bool test_constraints(bool (*constraints)(const dVector), double t) const;
+  // safe solution to the problem of monitoring constriants. t is
+  // chosen as t after n time steps.
+  bool test_constraints(bool (*constraints)(double,const dVector),
+			int n) const;
 
   // Tests whether or not a given set of constraints is
   // satisfied. Takes a boolean function of the vector y and tests
   // whether y(t) satisfies the constraint function. t is set to the
   // current time. This is the fast, safe solution to the problem of
   // monitoring constriants.
-  bool test_constraints(bool (*constraints)(const dVector)) const;
+  bool test_constraints(bool (*constraints)(double,const dVector)) const;
+
+  // Tests by how much the y vector at time t fails to satisfy the
+  // constraint function passed in. The constraint function should
+  // return a vector<double> where each element shows how much the y
+  // vector failed to satisfy the appropriate constraint
+  // equation. Passed by reference. Uses the most recent time.
+  dVector test_constraint_degree(dVector (*constraints)(double,const dVector)) const;
 
   // Tests by how much the y vector at time t fails to satisfy the
   // constraint function passed in. The constraint function should
   // return a vector<double> where each element shows how much the y
   // vector failed to satisfy the appropriate constraint
   // equation. Passed by reference.
-  dVector& test_constraints(dVector (*constraints)(const dVector)) const;
+  dVector test_constraint_degree(dVector (*constraints)(double,const dVector),
+				 int n) const;
 
   // Prints the integration history to an output stream. No stream
   // choice means it prints to cout. This is not the just the current
@@ -492,6 +553,11 @@ private: // Implementation details
   // sum. Assumes that the vectors are the same size. If they're not,
   // raises an error.
   dVector sum(const dVector& a, const dVector& b) const;
+
+  // Subtracts dVector b from a. Outputs a new vector that is their
+  // difference. Assumes that the vectors are the same size. If
+  // they're not, raises an error.
+  dVector difference(const dVector& a, dVector& b) const;
 
   // Calculuates the sum of all elements in a dVector.
   double sum(const dVector& v) const;
