@@ -1,7 +1,7 @@
 // rkf45.hpp
 
 // Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-// Time-stamp: <2013-10-15 01:13:50 (jonah)>
+// Time-stamp: <2013-10-15 15:51:18 (jonah)>
 
 // This is the prototype for my implementation of the 4-5
 // Runge-Kutta-Feldberg adaptive step size integrator. For simplicity,
@@ -280,12 +280,17 @@ public: // Public interface
   // Default safety factor for step size choices. Shrinks the step
   // size slightly for safety.
   static const double DEFAULT_SAFETY_MARGIN = 0.1;
+  // Output debug information
+  static const bool DEFAULT_OUTPUT_DEBUG_INFO = false;
 
   // defaults that have to be called because they're platform-dependent
   static double default_max_dt() {
     return sqrt(DBL_MAX);
   }
   static double default_absolute_error() {
+    return sqrt(DBL_EPSILON);
+  }
+  static double default_min_dt() {
     return sqrt(DBL_EPSILON);
   }
 
@@ -296,6 +301,16 @@ public: // Public interface
 
   // Getters 
   // ----------------------------------------------------------------------
+  // Output debug information?
+  bool output_debug_info() const {
+    return debugging;
+  }
+
+  // Min dt
+  double get_min_dt() const {
+    return min_dt;
+  }
+
   // Finds the error tolerance based on the current state of the system.
   double get_error_tolerance() const;
 
@@ -350,6 +365,11 @@ public: // Public interface
 
   // Setters
   // ----------------------------------------------------------------------
+  // Set debug information
+  void set_debug_output(bool setting) {
+    debugging = setting;
+  }
+
   // Sets the function y'=f. One version takes optional arguments. One
   // does not. The second vector is optional arguments. 
   void set_f(dVector (*f)(double,const dVector&));
@@ -373,6 +393,10 @@ public: // Public interface
   // resets to the default.
   void set_max_dt();
   void set_max_dt(double max_dt);
+
+  // Sets the minimum allowed step size.
+  void set_min_dt(double min_dt);
+  void set_min_dt();
 
   // Sets the initial step size. Passing in no arguments resets to the
   // default.
@@ -467,6 +491,11 @@ public: // Public interface
   void print() const;
   void print(ostream& out) const;
 
+  // Prints the current state of the system to ostream out. For
+  // debugging really.
+  void print_state(ostream& out) const;
+  void print_state() const;
+
   // Overload the stream input operator. Works like print(out).
   friend ostream& operator <<(ostream& out, const RKF45& in);
 
@@ -491,7 +520,8 @@ private: // Implementation details
 
   // Private fields.
   // ----------------------------------------------------------------------
-
+  // Output debug information?
+  bool debugging;
 
   // The pointer to the function f.
   // f(double t, const dVector& y,const dVector& optional_args)
@@ -521,6 +551,7 @@ private: // Implementation details
   double last_dt; // = LAST_STEP_SIZE_NO_STEPS_TAKEN;
   // The next step size. This is calculated during a step.
   double next_dt; // = dt0;
+  double min_dt; // DEFAULT MIN_DT;
 
   // Error tolerance values.
   double absolute_error;// = DEFAULT_ABSOLUTE_ERROR;

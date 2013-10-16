@@ -1,9 +1,9 @@
 // rkf45.cpp
 
 // Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-// Time-stamp: <2013-10-15 01:43:37 (jonah)>
+// Time-stamp: <2013-10-15 15:51:25 (jonah)>
 
-// This is my implementation of the 4-5 Runge-Kutta-Feldberg adaptive
+// This is my implementation of the 4-5 Runge-Kutta-Fehlberg adaptive
 // step size integrator. For simplicity, and so that I can bundle
 // public and private methods together, I take an object-oriented
 // approach.
@@ -19,6 +19,7 @@
 #include <float.h> // For machine precision information
 #include <cmath> // for math
 #include <cassert> // For error checking
+#include <iomanip> // for controlling io
 #include "rkf45.hpp" // the header for this program
 // Namespace specification. For convenience.
 using std::cout;
@@ -27,6 +28,7 @@ using std::vector;
 using std::ostream;
 using std::istream;
 using std::abs;
+using std::right;
 
 
 // Constructors
@@ -61,6 +63,7 @@ RKF45::RKF45(dVector (*y)(double, const dVector&), double t0,
   set_f(y);
   set_t0(t0);
   set_y0(y0);
+  set_dt0();
 }
 
 // Creates an integrator for an ode system with
@@ -76,6 +79,7 @@ RKF45::RKF45(dVector (*y)(double,const dVector&,const dVector&),
   set_t0(t0);
   set_y0(y0);
   set_optional_args(optional_args);
+  set_dt0();
 }
 
 // Creates an integrator of an ode system with y'=f(t,y), initial
@@ -218,6 +222,8 @@ RKF45& RKF45::operator= (const RKF45 &integrator) {
   return *this;
 }
 
+// Destructor. Empty/
+RKF45::~RKF45() { }
 
 // ----------------------------------------------------------------------
 
@@ -363,6 +369,9 @@ void RKF45::set_y0(const dVector& y0) {
   if ( ys.size() == 0 ) {
     ys.push_back(y0);
   }
+  else {
+    ys[0] = y0;
+  }
 }
 
 // Sets the start time. Passing in no arguments resets to the
@@ -371,6 +380,9 @@ void RKF45::set_t0(double t0) {
   this->t0 = t0;
   if ( ts.size() == 0 ) {
     ts.push_back(t0);
+  }
+  else {
+    ts[0] = t0;
   }
 }
 void RKF45::set_t0() {
@@ -400,6 +412,20 @@ void RKF45::set_max_dt() {
   set_max_dt(default_max_dt());
 }
 
+// Sets the minimum allowed step size.
+void RKF45::set_min_dt(double min_dt) {
+  assert (min_dt > 0 && "Steps must be positive." );
+  if (min_dt < get_next_dt() ) {
+    // Don't do anything about it since its not a fatal error. But
+    // warn the user.
+    cout << "WARNING: Next step size smaller than min step size." << endl;
+  }
+  this->min_dt = min_dt;
+}
+void RKF45::set_min_dt() {
+  set_min_dt(default_min_dt());
+}
+
 // Sets the initial step size. Passing in no arguments resets to the
 // default. If the input dt0 is too big, sets to max_dt.
 void RKF45::set_dt0(double dt0) {
@@ -416,11 +442,37 @@ void RKF45::set_dt0(double dt0) {
   }
 }
 
+// Sets the initial step size automatically. The function and initial
+// y data must be set for this to work. f, t0 and y0 must be set
+// before you can call this method. Also sets the max dt to the same
+// value.
+void RKF45::set_dt0() {
+  // locals
+  double yprime = norm(f(t0,y0));
+  double y = norm(y0);
+  double length_scale = yprime/y;
+  dt0 = abs(get_relative_error_factor() * length_scale);
+  // dt0 must be zero. If it's zero, make it sqrt(machine epsilon).
+  if ( !(dt0 > 0) ) {
+    dt0 = get_min_dt();
+  }
+  max_dt = dt0;
+  set_next_dt(dt0);
+}
+
 // Sets the next step size. Use with caution! If you set the next
 // step size, the value chosen automatically is forgotten!
 void RKF45::set_next_dt(double next_dt) {
   assert (next_dt > 0 && "Steps must be positive." );
-  this->next_dt = next_dt;
+  if ( next_dt > get_max_dt() ) {
+    this->next_dt = get_max_dt();
+  }
+  else if ( next_dt < get_min_dt() ) {
+    this->next_dt = get_min_dt();
+  }
+  else {
+    this->next_dt = next_dt;
+  }
 }
 
 // Sets the absolute error. Passing in no arguments resets to the
@@ -548,9 +600,9 @@ dVector RKF45::test_constraint_degree(dVector (*constraints)(double,const dVecto
 // choice means it prints to cout. This is not the just the current
 // state of the system. This is everything.
 void RKF45::print(ostream& out) const {
-  out << "# <time>\t <y vector>" << endl;
+  out << "#<time>\t <y vector>" << endl;
   for (unsigned int i = 0; i < ts.size(); i++) {
-    out << ts[i] << "\t";
+    out << ts[i] << " ";
     for (unsigned int j = 0; j < ys[i].size() - 1; j++) {
       out << ys[i][j] << " ";
     }
@@ -559,6 +611,19 @@ void RKF45::print(ostream& out) const {
 }
 void RKF45::print() const {
   print(cout);
+}
+
+// Prints the current state of the system to ostream out. For
+// debugging really.
+void RKF45::print_state(ostream& out) const {
+  out << "#<time>\t <y vector>" << endl;
+  for (unsigned int i = 0; i < ys.back().size() - 1; i++) {
+    out << ys.back()[i] << " ";
+  }
+  out << ys.back().back() << endl;
+}
+void RKF45::print_state() const {
+  print_state(cout);
 }
 
 
@@ -613,14 +678,31 @@ void RKF45::step() {
     y_new_order5 = sum(y_new_order5,scalar_product(BUTCHER_B[0][i],k[i]));
   }
 
+  if ( debugging ) {
+    cout << "Safety margin: " << get_safety_margin() << endl;
+    cout << "Current step size: " << h << endl;
+    cout << "Error tolerance: " << get_error_tolerance() << endl;
+    cout << "Difference: "
+	 << norm(difference(y_new_order5,y_new_order4)) << endl;
+  }
+
   // Then we can compute the next step size
-  new_step_size = ( get_safety_margin() * h * get_error_tolerance() )
-    / norm(difference(y_new_order5, y_new_order4));
+  new_step_size = abs( ( get_safety_margin() * h * get_error_tolerance() )
+		       / norm(difference(y_new_order5, y_new_order4)) );
 
   // Finally, set the next step size, set y and t, and end.
   set_next_dt(new_step_size);
+  if ( debugging ) {
+    cout << "New step size: " << get_next_dt() << endl;
+  }
+  
+  last_dt = h;
   ts.push_back(t+h);
   ys.push_back(y_new_order4);
+
+  if (debugging ) {
+    print_state();
+  }
 }
 
 // Integrates up to to time t_final. If the current time is after
@@ -635,11 +717,13 @@ void RKF45::integrate(double t_final) {
 // Resets the integrator to t0. This is useful for approaches like
 // the shooting method.
 void RKF45::reset() {
-  ys.resize(1);
-  ys[0] = y0;
-  ts.resize(1);
-  ts[0] = t0;
+  ys.resize(0);
+  ys.push_back(y0);
+  ts.resize(0);
+  ts.push_back(t0);
   set_next_dt(get_dt0());
+  assert ( ys.size() == 1 && ts.size() == 1
+	   && "Reset succesfull." );
 }
 
 // ----------------------------------------------------------------------
@@ -658,6 +742,8 @@ void RKF45::set_defaults() {
   absolute_error = default_absolute_error();
   relative_error_factor = DEFAULT_RELATIVE_ERROR_FACTOR;
   safety_margin = DEFAULT_SAFETY_MARGIN;
+  debugging = DEFAULT_OUTPUT_DEBUG_INFO;
+  min_dt = default_min_dt();
 }
 
 // A convenience function. Wraps the function f = y'. Depending on
