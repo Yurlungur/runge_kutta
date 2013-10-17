@@ -1,7 +1,7 @@
 // rkf45.cpp
 
 // Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-// Time-stamp: <2013-10-15 15:51:25 (jonah)>
+// Time-stamp: <2013-10-17 00:42:17 (jonah)>
 
 // This is my implementation of the 4-5 Runge-Kutta-Fehlberg adaptive
 // step size integrator. For simplicity, and so that I can bundle
@@ -27,9 +27,8 @@ using std::endl;
 using std::vector;
 using std::ostream;
 using std::istream;
-using std::abs;
 using std::right;
-
+using std::abs;
 
 // Constructors
 // ----------------------------------------------------------------------
@@ -401,10 +400,12 @@ void RKF45::set_optional_args(const dVector& optional_args) {
 // resets to the default.
 void RKF45::set_max_dt(double max_dt) {
   assert ( max_dt > 0 && "Steps must be positive." );
-  if ( max_dt > get_next_dt() ) {
+  if ( max_dt < get_next_dt() && debugging ) {
     // Don't do anything about it since its not a fatal error. But
     // warn the user.
-    cout << "WARNING: Next step size larger than max step size." << endl;
+    cout << "WARNING: Next step size larger than max step size." << "\n"
+	 << "\tMax step size: " << max_dt << "\n"
+	 << "\tNext step size: " << get_next_dt() << endl;
   }
   this->max_dt = max_dt;
 }
@@ -430,14 +431,17 @@ void RKF45::set_min_dt() {
 // default. If the input dt0 is too big, sets to max_dt.
 void RKF45::set_dt0(double dt0) {
   assert ( dt0 > 0 && "Steps must be positive." );
-  if ( dt0 < get_max_dt() ) {
-    this->dt0 = dt0;
-  }
-  else {
+  if ( dt0 > get_max_dt() ) {
     this->dt0 = get_max_dt();
   }
+  else if ( dt0 < get_min_dt() ) {
+    this->dt0 = get_min_dt();
+  }
+  else {
+    this->dt0 = dt0;
+  }
   // By definition, the first next_dt needs to be dt0.
-  if ( ys.size() < 1 ) {
+  if ( ys.size() < 2 ) {
     set_next_dt(this->dt0);
   }
 }
@@ -450,15 +454,39 @@ void RKF45::set_dt0() {
   // locals
   double yprime = norm(f(t0,y0));
   double y = norm(y0);
-  double length_scale = yprime/y;
+  double length_scale;
+  cout << "y = " << y << "\n" << "yprime = " << yprime << endl;
+  // y/y' = <change in t> * y/<change in y>. A good approximation of dt0. 
+  length_scale = y/yprime;
+  cout << "length scale = " << length_scale << endl;
   dt0 = abs(get_relative_error_factor() * length_scale);
-  // dt0 must be zero. If it's zero, make it sqrt(machine epsilon).
+  cout << "dt0 = " << dt0 << endl;
+  cout << "Max step size: " << get_max_dt() << endl;
+
+  // dt0 must be a finite, positive number. If it's zero or NaN, make
+  // it sqrt(machine epsilon).
   if ( !(dt0 > 0) ) {
-    dt0 = get_min_dt();
+    if ( debugging ) {
+      cout << "WARNING: dt0 non-finite. Setting it to the default minimum dt"
+	   << endl;
+    }
+    set_dt0(default_min_dt());
   }
-  max_dt = dt0;
-  set_next_dt(dt0);
+  else {
+    set_dt0(dt0);
+  }
 }
+
+// Sets the maximum change in dt. No choice sets it to the default.
+void RKF45::set_max_delta_dt(double max_delta) {
+  assert ( 0 < max_delta 
+	   && "max change in dt is current dt multiplied by max_delta_dt. So max_delta_dt must be positive." );
+    max_delta_dt = max_delta;
+}
+void RKF45::set_max_delta_dt() {
+  set_max_delta_dt(DEFAULT_MAX_DELTA_DT);
+}
+
 
 // Sets the next step size. Use with caution! If you set the next
 // step size, the value chosen automatically is forgotten!
@@ -641,6 +669,12 @@ ostream& operator <<(ostream& out, const RKF45& in) {
 // internally from the last integration step or set by set_dt0 or
 // set_next_dt.
 void RKF45::step() {
+  // If this is the first step and if dt0 is still the special
+  // defualt, choose a dt0 automatically.
+  if ( steps() < 2 && get_dt0() == DEFAULT_DT0 ) {
+    set_dt0();
+  }
+
   // Some local variables for convenience
   double t = ts.back();
   double h = get_next_dt();
@@ -660,22 +694,15 @@ void RKF45::step() {
   for (int i = 0; i < ORDER; i++) {
     y = y_of_t;
     for (int j = 0; j < i; j++) {
-      if ( BUTCHER_A[i][j] != 0 ) {
-	y = sum(y,scalar_product(BUTCHER_A[i][j],k[j]));
-      }
+      y = sum(y,scalar_multiplication(BUTCHER_A[i][j],k[j]));
     }
-    if ( BUTCHER_C[i] != 0 ) {
-      k[i] = scalar_product(h,f(t+BUTCHER_C[i]*h,y));
-    }
-    else {
-      k[i] = scalar_product(h,f(t,y));
-    }
+    k[i] = scalar_multiplication(h,f(t+BUTCHER_C[i]*h,y));
   }
 
   // Now we can safely compute the new y values.
   for (int i = 0; i < ORDER; i++) {
-    y_new_order4 = sum(y_new_order4,scalar_product(BUTCHER_B[1][i],k[i]));
-    y_new_order5 = sum(y_new_order5,scalar_product(BUTCHER_B[0][i],k[i]));
+    y_new_order4 = sum(y_new_order4,scalar_multiplication(BUTCHER_B[1][i],k[i]));
+    y_new_order5 = sum(y_new_order5,scalar_multiplication(BUTCHER_B[0][i],k[i]));
   }
 
   if ( debugging ) {
@@ -683,19 +710,25 @@ void RKF45::step() {
     cout << "Current step size: " << h << endl;
     cout << "Error tolerance: " << get_error_tolerance() << endl;
     cout << "Difference: "
-	 << norm(difference(y_new_order5,y_new_order4)) << endl;
+	 << abs(norm(difference(y_new_order5,y_new_order4))) << endl;
   }
 
   // Then we can compute the next step size
-  new_step_size = abs( ( get_safety_margin() * h * get_error_tolerance() )
-		       / norm(difference(y_new_order5, y_new_order4)) );
+  new_step_size = abs( ( get_safety_margin() * h * get_error_tolerance() ) / norm(difference(y_new_order5, y_new_order4)) );
 
-  // Finally, set the next step size, set y and t, and end.
+  // The change in the step size must be acceptable. The step size is
+  // allowed to decrease as quickly as it likes, but it must not
+  // INCREASE too quickly.
+  if ( new_step_size  > h*(get_max_delta_dt_factor() + 1) ) {
+    new_step_size = h + get_max_delta_dt_factor() * h;
+  }
+
+  // Finally, set the new step size and report it.
   set_next_dt(new_step_size);
   if ( debugging ) {
     cout << "New step size: " << get_next_dt() << endl;
   }
-  
+  // set y and t, and end.
   last_dt = h;
   ts.push_back(t+h);
   ys.push_back(y_new_order4);
@@ -744,6 +777,7 @@ void RKF45::set_defaults() {
   safety_margin = DEFAULT_SAFETY_MARGIN;
   debugging = DEFAULT_OUTPUT_DEBUG_INFO;
   min_dt = default_min_dt();
+  set_max_delta_dt();
 }
 
 // A convenience function. Wraps the function f = y'. Depending on
@@ -776,11 +810,11 @@ dVector RKF45::sum(const dVector& a, const dVector& b) const {
 // difference. Assumes that the vectors are the same size. If
 // they're not, raises an error.
 dVector RKF45::difference(const dVector& a, dVector& b) const {
-  return sum(a,scalar_product(-1,b));
+  return sum(a,scalar_multiplication(-1,b));
 }
 
-// Takes the scalar product of a dVector v with a scalar k
-dVector RKF45::scalar_product(double k, const dVector& v) const {
+// Takes the scalar multiplicationof a dVector v with a scalar k
+dVector RKF45::scalar_multiplication(double k, const dVector& v) const {
   dVector output;
   for (dVector::const_iterator it=v.begin(); it != v.end(); ++it) {
     output.push_back(k * (*it));
@@ -799,9 +833,11 @@ double RKF45::sum(const dVector& v) const {
 
 // Calculates the 2-norm of the dVector v
 double RKF45::norm(const dVector& v) const {
-  double output = sum(v);
-  output /= v.size();
-  return abs(output);
+  double output = 0;
+  for (dVector::const_iterator it=v.begin(); it != v.end(); ++it) {
+    output += (*it) * (*it);
+  }
+  return sqrt(output);
 }
 
 // Finds the relative error tolerance based on the current state of

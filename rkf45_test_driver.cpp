@@ -1,7 +1,7 @@
 // rkf45_test_driver.cpp
 
 // Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-// Time-stamp: <2013-10-15 15:52:12 (jonah)>
+// Time-stamp: <2013-10-17 01:15:52 (jonah)>
 
 // This is my test driver for the 4-5 Runge-Kutta_Fehlberg adatprive
 // step size integrator.
@@ -22,14 +22,12 @@ using std::endl;
 using std::vector;
 using std::ostream;
 using std::istream;
-using std::abs;
-using std::pow;
 using std::ofstream;
 
 dVector f_harmonic(double t, const dVector& v) {
   dVector output;
-  output.push_back(-v[1]);
-  output.push_back(v[0]);
+  output.push_back(v[1]);
+  output.push_back(-v[0]);
   return output;
 }
 
@@ -51,19 +49,36 @@ int main () {
   // We'll reuse this stream several times.
   ofstream myfile;
 
-  cout << "Testing the SHO." << endl;
-  INITIAL_Y.push_back(1);
+  cout << "Testing the SHO." << "\n"
+       << "------------------------------------------------------------\n"
+       << "------------------------------------------------------------\n"
+       << "\n" << endl;
+    
   INITIAL_Y.push_back(0);
+  INITIAL_Y.push_back(1);
 
   RKF45 integrator(f_harmonic,T0,INITIAL_Y);
   integrator.set_debug_output(false);
-  integrator.set_absolute_error(1.0E-2);
-  integrator.set_relative_error_factor(1);
-  integrator.set_min_dt(.1);
-  integrator.set_max_dt(.1);
+  integrator.set_absolute_error(1E-4);
+  integrator.set_relative_error_factor(1E-4);
+  //integrator.set_min_dt(.1);
+  //integrator.set_max_dt(.1);
 
-  cout << "Testing the initial state." << endl;
-  cout << integrator << endl;
+  cout << "\nTesting the error method." << endl;
+  cout << "Absolute error: " << integrator.get_absolute_error() << "\n"
+       << "Relative error factor: "
+       << integrator.get_relative_error_factor() << "\n"
+       << "Error tolerance: " << integrator.get_error_tolerance() << "\n"
+       << endl;
+
+  cout << "Testing the initial state." << "\n"
+       << "\tNumber of steps: " << integrator.steps() << "\n"
+       << "\tdt0 = " << integrator.get_dt0() << "\n"
+       << "\tNext dt = " << integrator.get_next_dt() << "\n"
+       << "\tMax delta dt factor = "
+       << integrator.get_max_delta_dt_factor() << "\n"
+       << "-----------------------------------------------\n"
+       << integrator << endl;
 
   cout << "\nTesting one step." << endl;
   integrator.step();
@@ -71,12 +86,13 @@ int main () {
 
   cout << "\nTesting integration to finite t, say 6 pi." << endl;
   integrator.integrate(6*M_PI);
-  cout << integrator << endl;
+  //  cout << integrator << endl;
 
   cout << "\nSaving this output to file for plotting." << endl;
   myfile.open("SHO.dat");
   myfile << integrator << endl;
   myfile.close();
+  
   /*
   cout << "\nNow we want to test accuracy. We Is it 4th order accurate?"
        << endl;

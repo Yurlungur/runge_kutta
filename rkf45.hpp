@@ -1,7 +1,7 @@
 // rkf45.hpp
 
 // Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-// Time-stamp: <2013-10-15 15:51:18 (jonah)>
+// Time-stamp: <2013-10-17 00:39:51 (jonah)>
 
 // This is the prototype for my implementation of the 4-5
 // Runge-Kutta-Feldberg adaptive step size integrator. For simplicity,
@@ -106,7 +106,6 @@ using std::vector;
 using std::ostream;
 using std::istream;
 using std::sqrt;
-using std::abs;
 
 // We use the dVector type a lot, so let's define a type for it
 // to make things more readable.
@@ -270,8 +269,9 @@ public: // Public interface
   // Default for whether or not we use a function with optional
   // arguments
   static const bool DEFAULT_USE_OPTIONAL_ARGS = false;
-  // Default initial step size.
-  static const double DEFAULT_DT0 = 0.01;
+  // Default initial step size. We choose a weird number to mark it as
+  // different. Kind of a hack.
+  static const double DEFAULT_DT0 = 0.00123456;
   // The last step size needs a value before any steps have been
   // taken. We set it to minus 1.
   static const double LAST_STEP_SIZE_NO_STEPS_TAKEN = -1;
@@ -279,9 +279,11 @@ public: // Public interface
   static const double DEFAULT_RELATIVE_ERROR_FACTOR = 0.001;
   // Default safety factor for step size choices. Shrinks the step
   // size slightly for safety.
-  static const double DEFAULT_SAFETY_MARGIN = 0.1;
+  static const double DEFAULT_SAFETY_MARGIN = 0.9;
   // Output debug information
   static const bool DEFAULT_OUTPUT_DEBUG_INFO = false;
+  // Default max change in dt percentagewise. By default, it's 100%
+  static const double DEFAULT_MAX_DELTA_DT = 1;
 
   // defaults that have to be called because they're platform-dependent
   static double default_max_dt() {
@@ -309,6 +311,11 @@ public: // Public interface
   // Min dt
   double get_min_dt() const {
     return min_dt;
+  }
+
+  // Max change in dt.
+  double get_max_delta_dt_factor() const {
+    return max_delta_dt;
   }
 
   // Finds the error tolerance based on the current state of the system.
@@ -397,6 +404,10 @@ public: // Public interface
   // Sets the minimum allowed step size.
   void set_min_dt(double min_dt);
   void set_min_dt();
+
+  // Sets the maximum change in dt. No choice sets it to the default.
+  void set_max_delta_dt(double max_delta);
+  void set_max_delta_dt();
 
   // Sets the initial step size. Passing in no arguments resets to the
   // default.
@@ -552,6 +563,7 @@ private: // Implementation details
   // The next step size. This is calculated during a step.
   double next_dt; // = dt0;
   double min_dt; // DEFAULT MIN_DT;
+  double max_delta_dt; // The maximum allowed change in dt.
 
   // Error tolerance values.
   double absolute_error;// = DEFAULT_ABSOLUTE_ERROR;
@@ -596,8 +608,8 @@ private: // Implementation details
   // Calculuates the sum of all elements in a dVector.
   double sum(const dVector& v) const;
 
-  // Takes the scalar product of a dVector v with a scalar k
-  dVector scalar_product(double k, const dVector& v) const;
+  // Takes the scalar multiplication of a dVector v with a scalar k
+  dVector scalar_multiplication(double k, const dVector& v) const;
 
 };
 
