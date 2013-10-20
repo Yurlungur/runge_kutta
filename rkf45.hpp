@@ -1,7 +1,7 @@
 // rkf45.hpp
 
 // Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-// Time-stamp: <2013-10-17 00:39:51 (jonah)>
+// Time-stamp: <2013-10-19 12:59:46 (jonah)>
 
 // This is the prototype for my implementation of the 4-5
 // Runge-Kutta-Feldberg adaptive step size integrator. For simplicity,
@@ -125,7 +125,7 @@ const double BUTCHER_A[6][6] =
     { -8.0/27,      2.0,        -3544.0/2565, 1859.0/4104, -11.0/40, 0 } };
 
 // The b coefficients for the Butcher tableau have two sets. The first
-// row is for the fifcth-order accurate piece. The second row is for
+// row is for the fifth-order accurate piece. The second row is 
 // the fourth-order accurate piece.
 const double BUTCHER_B[][6] =
   { { 16.0/135, 0, 6656.0/12825, 28561.0/56430, -9.0/50, 2.0/55 },
@@ -433,6 +433,9 @@ public: // Public interface
   void set_safety_margin();
   void set_safety_margin(double safety_margin);
 
+  // Check the consistency of the butcher tableau
+  void check_consistency();
+
 
   // Data output
   // ----------------------------------------------------------------------
@@ -589,9 +592,9 @@ private: // Implementation details
   dVector f(int t, const dVector& y) const;
 
   // Finds the relative error tolerance based on the current state of
-  // the system.
+  // the system.    
   double get_relative_error_tolerance() const;
-
+  
   // Calculates the 2-norm of the vector v
   double norm(const dVector& v) const;
 
@@ -599,6 +602,16 @@ private: // Implementation details
   // sum. Assumes that the vectors are the same size. If they're not,
   // raises an error.
   dVector sum(const dVector& a, const dVector& b) const;
+
+  // Adds the dVector b to the dVector a. a is modified in-place.
+  void sum_in_place(dVector& a, const dVector& b) const;
+
+  // Adds k*b to the dVector a. k is a scalar. b is a dVector.
+  void linear_combination_in_place(dVector& a,
+				   double k, const dVector& b) const;
+
+  // Takes the norm of the difference between two dVectors.
+  double norm_difference(const dVector& a, const dVector& b) const;
 
   // Subtracts dVector b from a. Outputs a new vector that is their
   // difference. Assumes that the vectors are the same size. If
@@ -611,5 +624,16 @@ private: // Implementation details
   // Takes the scalar multiplication of a dVector v with a scalar k
   dVector scalar_multiplication(double k, const dVector& v) const;
 
+  // Calculate the new step size based on the old step size and the
+  // two new calculated values of y. Step size is step_size_factor *
+  // current step size. h is the current step size.
+  double calculate_new_step_size(const dVector y_new_order_4,
+				 const dVector y_new_order_5,
+				 double h) const;
+
+  // Generate the k factors used in the method. Fill an appropriately
+  // sized array. h is the difference in t.
+  void make_ks(dVector k[], double h) const;
+  
 };
 

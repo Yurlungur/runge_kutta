@@ -1,7 +1,7 @@
 // rkf45_test_driver.cpp
 
 // Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-// Time-stamp: <2013-10-17 01:15:52 (jonah)>
+// Time-stamp: <2013-10-19 13:23:18 (jonah)>
 
 // This is my test driver for the 4-5 Runge-Kutta_Fehlberg adatprive
 // step size integrator.
@@ -33,12 +33,16 @@ dVector f_harmonic(double t, const dVector& v) {
 
 dVector fxp(double t, const dVector& v,const dVector& power) {
   dVector output;
-  double prefactor = 1;
-  for (int i = 0; i < power[0]; i++) {
-    prefactor *= (power[0] - i);
-    output.push_back(prefactor * pow(t,power[0] - (i + 1)));
-  }
+  output.push_back( pow(t,power[0]) );
   return output;
+}
+
+void print(dVector v) {
+  cout << "[ ";
+  for (dVector::const_iterator it = v.begin(); it != v.end(); ++it) {
+    cout << (*it) << " ";
+  }
+  cout << "]";
 }
 
 dVector INITIAL_Y;
@@ -58,11 +62,9 @@ int main () {
   INITIAL_Y.push_back(1);
 
   RKF45 integrator(f_harmonic,T0,INITIAL_Y);
-  integrator.set_debug_output(false);
-  integrator.set_absolute_error(1E-4);
-  integrator.set_relative_error_factor(1E-4);
-  //integrator.set_min_dt(.1);
-  //integrator.set_max_dt(.1);
+  integrator.set_debug_output(true);
+  integrator.set_absolute_error(1E-3);
+  integrator.set_relative_error_factor(0);
 
   cout << "\nTesting the error method." << endl;
   cout << "Absolute error: " << integrator.get_absolute_error() << "\n"
@@ -86,33 +88,62 @@ int main () {
 
   cout << "\nTesting integration to finite t, say 6 pi." << endl;
   integrator.integrate(6*M_PI);
-  //  cout << integrator << endl;
 
   cout << "\nSaving this output to file for plotting." << endl;
   myfile.open("SHO.dat");
   myfile << integrator << endl;
   myfile.close();
-  
-  /*
-  cout << "\nNow we want to test accuracy. We Is it 4th order accurate?"
+  /*  
+  cout << "This concludes the test of the simple harmonic oscillator.\n"
        << endl;
+  cout << "\nNow we want to test accuracy. We Is it 4th order accurate?\n"
+       << "-------------------------------------------------------------"
+       << endl;
+  INITIAL_Y.resize(0);
+  OPTIONAL_ARGS.resize(0);
+  INITIAL_Y.push_back(0);
   OPTIONAL_ARGS.push_back(4);
+  cout << "Initial y vector: ";
+  print(INITIAL_Y);
+  cout << endl;
+  cout << "Optional arguments: ";
+  print(OPTIONAL_ARGS);
+  cout << endl;
+  cout << "And f(0.1) = ";
+  print(fxp(0.1,INITIAL_Y,OPTIONAL_ARGS));
+  cout << " (it should equal 10^(-4).)" << endl;
+  cout << "Testing integrator reset functions.\n"
+       << "We will set the step size to 0.1 to avoid fitting to error."
+       << endl;
+
   integrator.set_f(fxp);
   integrator.set_optional_args(OPTIONAL_ARGS);
   integrator.set_y0(INITIAL_Y);
-  integrator.set_t0(T0);
+  integrator.set_t0(1);
+  integrator.set_absolute_error(0);
+  integrator.set_relative_error_factor(1E-2);
+  //  integrator.set_min_dt(0.1);
+  //  integrator.set_max_dt(0.1);
   integrator.reset();
-  INITIAL_Y = dVector(4,0);
-  INITIAL_Y.push_back(24);
+  cout << "Before integrating, here's the integrator pre-reset.\n"
+       << "\tSteps: " << integrator.steps() << "\n"
+       << "\tSize: " << integrator.size() << "\n"
+       << "\ty0: ";
+  print(integrator.get_y0());
+  cout << "\n\tt0: " << integrator.get_t0() << "\n"
+       << "\tdt0: " << integrator.get_dt0() << "\n"
+
+       << "\tt: " << integrator.get_t() << "\n";
+  cout << "State\n" << integrator << endl;
 
   cout << "Now let's try integrating the interval [0,1]" << endl;
-  integrator.integrate(1);
+  integrator.integrate(2);
   cout << integrator << endl;
-  cout << "The integrator should have found the answer to be 1/5. Is it?"
+  cout << "The integrator should have found the answer to be:\n"
+       << "about 6.2. Is it?"
        << endl;
   integrator.print_state(cout);
   cout << endl;
   */
-
   return 0;
 }

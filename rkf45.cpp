@@ -1,7 +1,7 @@
 // rkf45.cpp
 
 // Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-// Time-stamp: <2013-10-17 00:42:17 (jonah)>
+// Time-stamp: <2013-10-19 12:59:58 (jonah)>
 
 // This is my implementation of the 4-5 Runge-Kutta-Fehlberg adaptive
 // step size integrator. For simplicity, and so that I can bundle
@@ -338,6 +338,31 @@ double RKF45::get_relative_error_factor() const {
 double RKF45::get_safety_margin() const {
   return safety_margin;
 }
+
+// Check the consistency of the butcher tableau
+void RKF45::check_consistency() {
+  double sum_of_as;
+  bool is_consistent = true;
+  if (debugging) {
+    cout << "Checking if Butcher tableau is consistent." << endl;
+  }
+  for (int i = 0; i < ORDER; i++) {
+    sum_of_as = 0;
+    for (int j = 0; j < i; j++) {
+      sum_of_as += BUTCHER_A[i][j];
+    }
+    if ( debugging ) {
+      cout << "Row " << i << ": "
+	   << sum_of_as - BUTCHER_C[i] << endl;
+    }
+    is_consistent = is_consistent
+      && (sum_of_as - BUTCHER_C[i] - default_min_dt() );
+    assert ( is_consistent && "Butcher tableau is not consistent!" );
+  }
+  if ( debugging ) {
+    cout << "Butcher tableau is consistent." << endl;
+  }
+}
 // ----------------------------------------------------------------------
 
 
@@ -491,11 +516,13 @@ void RKF45::set_max_delta_dt() {
 // Sets the next step size. Use with caution! If you set the next
 // step size, the value chosen automatically is forgotten!
 void RKF45::set_next_dt(double next_dt) {
-  assert (next_dt > 0 && "Steps must be positive." );
+  if ( ! (next_dt > 0)  && ( debugging || steps() < 2 ) ) {
+    cout << "WARNING: Steps must be positive!" << endl;
+  }
   if ( next_dt > get_max_dt() ) {
     this->next_dt = get_max_dt();
   }
-  else if ( next_dt < get_min_dt() ) {
+  else if ( next_dt < get_min_dt() || ! ( next_dt > 0 ) ) {
     this->next_dt = get_min_dt();
   }
   else {
@@ -506,7 +533,7 @@ void RKF45::set_next_dt(double next_dt) {
 // Sets the absolute error. Passing in no arguments resets to the
 // default.
 void RKF45::set_absolute_error(double absolute_error) {
-  assert ( absolute_error > 0 && "Error must be positive." );
+  assert ( absolute_error >= 0 && "Error must be non-negative." );
   this->absolute_error = absolute_error;
 }
 void RKF45::set_absolute_error() {
@@ -516,7 +543,7 @@ void RKF45::set_absolute_error() {
 // Sets the relative error factor. Passing in no arguments resets to
 // the default.
 void RKF45::set_relative_error_factor(double relative_error_factor) {
-  assert ( relative_error_factor > 0 && "Error must be positive." );
+  assert ( relative_error_factor >= 0 && "Error must be non-negative." );
   this->relative_error_factor = relative_error_factor;
 }
 void RKF45::set_relative_error_factor() {
@@ -674,65 +701,72 @@ void RKF45::step() {
   if ( steps() < 2 && get_dt0() == DEFAULT_DT0 ) {
     set_dt0();
   }
-
-  // Some local variables for convenience
-  double t = ts.back();
+  // A few convenience terms
   double h = get_next_dt();
-  dVector y_of_t = ys.back();
-  dVector y;
-
-  // The new orders for the dynamic step size
-  dVector y_new_order4 = y_of_t;
-  dVector y_new_order5 = y_of_t;
-  double new_step_size;
-  
-  // This is the doozy. First we need to compute the five k
-  // factors. The indexing scheme is off by 1 from the
-  // standard. Subtract 1 for the index if you're reading off of
-  // wikipedia.
+  double t = ts.back();
+  // The k vectors
   dVector k[ORDER];
-  for (int i = 0; i < ORDER; i++) {
-    y = y_of_t;
-    for (int j = 0; j < i; j++) {
-      y = sum(y,scalar_multiplication(BUTCHER_A[i][j],k[j]));
+  // The new orders for the dynamic step size
+  dVector y_new_order4;
+  dVector y_new_order5;
+  double new_step_size;
+  double error;
+  
+  // Calculate the error from a step. If therror is unacceptably large,
+  // try again and shrink the step size.
+  do {
+    // Make the k terms.
+    make_ks(k,h);
+    
+    // Now we can safely compute the new y values.
+    y_new_order4 = ys.back();
+    y_new_order5 = ys.back();
+    for (int i = 0; i < ORDER; i++) {
+      linear_combination_in_place(y_new_order4,BUTCHER_B[1][i],k[i]);
+      linear_combination_in_place(y_new_order5,BUTCHER_B[0][i],k[i]);
     }
-    k[i] = scalar_multiplication(h,f(t+BUTCHER_C[i]*h,y));
-  }
 
-  // Now we can safely compute the new y values.
-  for (int i = 0; i < ORDER; i++) {
-    y_new_order4 = sum(y_new_order4,scalar_multiplication(BUTCHER_B[1][i],k[i]));
-    y_new_order5 = sum(y_new_order5,scalar_multiplication(BUTCHER_B[0][i],k[i]));
-  }
-
-  if ( debugging ) {
-    cout << "Safety margin: " << get_safety_margin() << endl;
-    cout << "Current step size: " << h << endl;
-    cout << "Error tolerance: " << get_error_tolerance() << endl;
-    cout << "Difference: "
-	 << abs(norm(difference(y_new_order5,y_new_order4))) << endl;
-  }
-
+    error = norm_difference(y_new_order5,y_new_order4);
+    
+    if ( debugging ) {
+      cout << "\tSafety margin: " << get_safety_margin() << endl;
+      cout << "\tCurrent step size: " << h << endl;
+      cout << "\tError tolerance: " << get_error_tolerance() << endl;
+      cout << "\ty order 4: [ ";
+      for (dVector::const_iterator it=y_new_order4.begin();
+	   it != y_new_order4.end(); ++it) {
+	cout << (*it) << " ";
+      }
+      cout << "]" << endl;
+      cout << "\ty order 5: [ ";
+      for (dVector::const_iterator it = y_new_order5.begin();
+	   it != y_new_order5.end(); ++it) {
+	cout << (*it) << " ";
+      }
+      cout << "]" << endl;
+      cout << "\tDifference: " << error << endl;
+    }
+    if ( error > get_error_tolerance() ) {
+      h = h/2.0;
+      if ( debugging ) {
+	cout << "Step size too large. Reducing by factor of 2." << endl;
+      }
+    }
+  } while ( error > get_error_tolerance() );
+  
   // Then we can compute the next step size
-  new_step_size = abs( ( get_safety_margin() * h * get_error_tolerance() ) / norm(difference(y_new_order5, y_new_order4)) );
-
-  // The change in the step size must be acceptable. The step size is
-  // allowed to decrease as quickly as it likes, but it must not
-  // INCREASE too quickly.
-  if ( new_step_size  > h*(get_max_delta_dt_factor() + 1) ) {
-    new_step_size = h + get_max_delta_dt_factor() * h;
-  }
-
+  new_step_size = calculate_new_step_size(y_new_order5,y_new_order4,h);
+  
   // Finally, set the new step size and report it.
   set_next_dt(new_step_size);
   if ( debugging ) {
     cout << "New step size: " << get_next_dt() << endl;
-  }
+    }
   // set y and t, and end.
   last_dt = h;
   ts.push_back(t+h);
   ys.push_back(y_new_order4);
-
+  
   if (debugging ) {
     print_state();
   }
@@ -767,6 +801,7 @@ void RKF45::reset() {
 
 // A convenience function. Sets all the fields to their default values.
 void RKF45::set_defaults() {
+  check_consistency();
   t0 = DEFAULT_T0;
   use_optional_arguments = DEFAULT_USE_OPTIONAL_ARGS;
   max_dt = default_max_dt();
@@ -802,6 +837,36 @@ dVector RKF45::sum(const dVector& a, const dVector& b) const {
   output.resize(size);
   for (int i = 0; i < size; i++) {
     output[i] = a[i] + b[i];
+  }
+  return output;
+}
+
+// Adds the dVector b to the dVector a. a is modified in-place.
+void RKF45::sum_in_place(dVector& a, const dVector& b) const {
+    assert ( a.size() == b.size()
+	   && "To sum two vectors, they must be the same size.");
+    for (unsigned int i = 0; i < a.size(); i++) {
+      a[i] += b[i];
+    }
+}
+
+// Adds k*b to the dVector a. k is a scalar. b is a dVector.
+void RKF45::linear_combination_in_place(dVector& a,
+					double k, const dVector& b) const {
+  assert ( a.size() == b.size()
+	   && "To sum two vectors, they must be the same size.");
+  for (unsigned int i = 0; i < a.size(); i++) {
+    a[i] += k*b[i];
+  }
+}
+
+// Takes the norm of the difference between two dVectors.
+double RKF45::norm_difference(const dVector& a, const dVector& b) const {
+  assert ( a.size() == b.size()
+	   && "To sum two vectors, they must be the same size.");
+  double output = 0;
+  for (unsigned int i = 0; i < a.size(); i++) {
+    output += (a[i] - b[i]) * (a[i] - b[i]);
   }
   return output;
 }
@@ -851,5 +916,77 @@ double RKF45::get_relative_error_tolerance() const {
   }
 }
 
+// Calculate the new step size based on the old step size and the
+// two new calculated values of y. Step size is step_size_factor *
+// current step size.
+double RKF45::calculate_new_step_size(const dVector y_new_order4,
+				      const dVector y_new_order5,
+				      double h) const {
+  // The factor by which we will multiply the current step size to get
+  // the new step size.
+  double s;
+  // The new step size
+  double new_step_size;
+  // To get s, we will take a fraction to the fourth power. Here are
+  // the numerator and denominator.
+  double numerator = get_error_tolerance();
+  double denominator =  2.0 * norm_difference(y_new_order4,y_new_order5);
+  s = get_safety_margin() * pow( numerator/denominator, 0.25 );
 
+  if ( debugging ) {
+    cout << "\tDesired s factor: " << s << endl;
+  }
+  
+  // The change in the step size must be acceptable. The step size is
+  // allowed to decrease as quickly as it likes, but it must not
+  // INCREASE too quickly.
+  if ( s > get_max_delta_dt_factor() + 1 ) {
+    s  = get_max_delta_dt_factor() + 1;
+  }
+  if ( debugging ) {
+    cout << "\tSelected s factor: " << s << endl;
+  }
+
+  new_step_size = s * h;
+
+  return new_step_size;
+}
+
+// Generate the k factors used in the method. Fill an appropriately
+// sized array. h is the difference in t.
+void RKF45::make_ks(dVector k[], double h) const {
+  // Some local variables for convenience
+  double t = ts.back();
+  dVector y_of_t = ys.back();
+  dVector y;
+
+  // Just to be safe, reset the k values.
+  for (int i = 0; i < ORDER; i++) {
+    k[i].resize(0);
+  }
+
+  // This is the doozy. First we need to compute the five k
+  // factors. The indexing scheme is off by 1 from the
+  // standard. Subtract 1 for the index if you're reading off of
+  // wikipedia.
+  for (int i = 0; i < ORDER; i++) {
+    y = y_of_t;
+    for (int j = 0; j < i; j++) {
+      linear_combination_in_place(y,BUTCHER_A[i][j],k[j]);
+      // TEMPORARY DEBUGGING STATEMENT
+      cout << "\t\t" << j << ": [ ";
+      for (dVector::const_iterator it = y.begin(); it != y.end(); ++it) {
+	cout << (*it) << " ";
+      }
+      cout << "]" << endl;
+    }
+    k[i] = scalar_multiplication(h,f(t+BUTCHER_C[i]*h,y));
+    // TEMPORARY DEBUGGING STATEMENT
+    cout << "\tk[" << i << "] = [ ";
+    for (dVector::const_iterator it = k[i].begin(); it != k[i].end(); ++it) {
+      cout << (*it) << " ";
+    }
+    cout << "]" << endl;
+  }
+}
 
