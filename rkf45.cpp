@@ -1,7 +1,7 @@
 // rkf45.cpp
 
 // Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-// Time-stamp: <2013-10-19 12:59:58 (jonah)>
+// Time-stamp: <2013-10-21 20:56:56 (jonah)>
 
 // This is my implementation of the 4-5 Runge-Kutta-Fehlberg adaptive
 // step size integrator. For simplicity, and so that I can bundle
@@ -340,10 +340,10 @@ double RKF45::get_safety_margin() const {
 }
 
 // Check the consistency of the butcher tableau
-void RKF45::check_consistency() {
+void RKF45::check_consistency() const {
   double sum_of_as;
   bool is_consistent = true;
-  if (debugging) {
+  if ( debug_level >= 3 ) {
     cout << "Checking if Butcher tableau is consistent." << endl;
   }
   for (int i = 0; i < ORDER; i++) {
@@ -351,7 +351,7 @@ void RKF45::check_consistency() {
     for (int j = 0; j < i; j++) {
       sum_of_as += BUTCHER_A[i][j];
     }
-    if ( debugging ) {
+    if ( debug_level >= 3 ) {
       cout << "Row " << i << ": "
 	   << sum_of_as - BUTCHER_C[i] << endl;
     }
@@ -359,9 +359,14 @@ void RKF45::check_consistency() {
       && (sum_of_as - BUTCHER_C[i] - default_min_dt() );
     assert ( is_consistent && "Butcher tableau is not consistent!" );
   }
-  if ( debugging ) {
+  if ( debug_level >= 3 ) {
     cout << "Butcher tableau is consistent." << endl;
   }
+}
+
+// Get whether or not we are using 5th order terms
+bool RKF45::using_5th_order() const {
+  return use_5th_order;
 }
 // ----------------------------------------------------------------------
 
@@ -396,6 +401,13 @@ void RKF45::set_y0(const dVector& y0) {
   else {
     ys[0] = y0;
   }
+  // The initial error vector must be zero.
+  if ( errors.size() == 0) {
+    errors.push_back(0);
+  }
+  else {
+    errors[0] = 0;
+  }
 }
 
 // Sets the start time. Passing in no arguments resets to the
@@ -425,7 +437,7 @@ void RKF45::set_optional_args(const dVector& optional_args) {
 // resets to the default.
 void RKF45::set_max_dt(double max_dt) {
   assert ( max_dt > 0 && "Steps must be positive." );
-  if ( max_dt < get_next_dt() && debugging ) {
+  if ( max_dt < get_next_dt() && debug_level >= 1 ) {
     // Don't do anything about it since its not a fatal error. But
     // warn the user.
     cout << "WARNING: Next step size larger than max step size." << "\n"
@@ -480,18 +492,24 @@ void RKF45::set_dt0() {
   double yprime = norm(f(t0,y0));
   double y = norm(y0);
   double length_scale;
-  cout << "y = " << y << "\n" << "yprime = " << yprime << endl;
+  if ( debug_level >= 3) {
+    cout << "y = " << y << "\n" << "yprime = " << yprime << endl;
+  }
   // y/y' = <change in t> * y/<change in y>. A good approximation of dt0. 
   length_scale = y/yprime;
-  cout << "length scale = " << length_scale << endl;
+  if ( debug_level >= 3 ) {
+    cout << "length scale = " << length_scale << endl;
+  }
   dt0 = abs(get_relative_error_factor() * length_scale);
-  cout << "dt0 = " << dt0 << endl;
-  cout << "Max step size: " << get_max_dt() << endl;
+  if ( debug_level >= 1 ) {
+    cout << "dt0 = " << dt0 << endl;
+    // cout << "Max step size: " << get_max_dt() << endl;
+  }
 
   // dt0 must be a finite, positive number. If it's zero or NaN, make
   // it sqrt(machine epsilon).
   if ( !(dt0 > 0) ) {
-    if ( debugging ) {
+    if ( debug_level >= 1 ) {
       cout << "WARNING: dt0 non-finite. Setting it to the default minimum dt"
 	   << endl;
     }
@@ -516,7 +534,7 @@ void RKF45::set_max_delta_dt() {
 // Sets the next step size. Use with caution! If you set the next
 // step size, the value chosen automatically is forgotten!
 void RKF45::set_next_dt(double next_dt) {
-  if ( ! (next_dt > 0)  && ( debugging || steps() < 2 ) ) {
+  if ( ! (next_dt > 0)  && ( debug_level >= 1 || steps() < 2 ) ) {
     cout << "WARNING: Steps must be positive!" << endl;
   }
   if ( next_dt > get_max_dt() ) {
@@ -558,6 +576,20 @@ void RKF45::set_safety_margin(double safety_margin) {
 }
 void RKF45::set_safety_margin() {
   set_safety_margin(DEFAULT_SAFETY_MARGIN);
+}
+
+// Set use fifth order terms. No arguments sets it to the default.
+// We can choose to return fifth-order terms instead of fourth-order
+// terms in the Runge-Kutta approximation to make the system
+// fifth-order accurate. However, there is much less of a guarantee
+// that the error will be truncated correctly. This is mostly for
+// testing purposes. It also works if the user knows the appropriate
+// step size. Default is false.
+void RKF45::set_use_5th_order_terms(bool use_terms) {
+  this->use_5th_order = use_terms;
+}
+void RKF45::set_use_5th_order_terms() {
+  set_use_5th_order_terms(DEFAULT_USE_5TH_ORDER);
 }
 // ----------------------------------------------------------------------
 
@@ -610,6 +642,15 @@ void RKF45::get_y(double y_data[]) const {
   }
 }
 
+// Returns the local truncation error after n steps. Entering no
+// value returns the most recent truncation error.
+double RKF45::get_local_truncation_error(int n) const {
+  return errors[n];
+}
+double RKF45::get_local_truncation_error() const {
+  return errors.back();
+}
+
 // Tests whether or not a given set of constraints is
 // satisfied. Takes a boolean function of the vector y and tests
 // whether y(t) satisfies the constraint function. This is the fast,
@@ -655,13 +696,15 @@ dVector RKF45::test_constraint_degree(dVector (*constraints)(double,const dVecto
 // choice means it prints to cout. This is not the just the current
 // state of the system. This is everything.
 void RKF45::print(ostream& out) const {
-  out << "#<time>\t <y vector>" << endl;
+  out << "#<time>\t<y vector>\t<local error>" << endl;
   for (unsigned int i = 0; i < ts.size(); i++) {
     out << ts[i] << " ";
     for (unsigned int j = 0; j < ys[i].size() - 1; j++) {
       out << ys[i][j] << " ";
     }
-    out << ys[i].back() << endl;
+    out << ys[i].back() << " ";
+    out << errors.back();
+    out << endl;
   }
 }
 void RKF45::print() const {
@@ -671,11 +714,14 @@ void RKF45::print() const {
 // Prints the current state of the system to ostream out. For
 // debugging really.
 void RKF45::print_state(ostream& out) const {
-  out << "#<time>\t <y vector>" << endl;
+  out << "#<time>\t<y vector>\t<local error>" << endl;
+  out << ts.back() << " ";
   for (unsigned int i = 0; i < ys.back().size() - 1; i++) {
     out << ys.back()[i] << " ";
   }
-  out << ys.back().back() << endl;
+  out << ys.back().back() << " ";
+  out << errors.back();
+  out << endl;
 }
 void RKF45::print_state() const {
   print_state(cout);
@@ -686,6 +732,26 @@ void RKF45::print_state() const {
 ostream& operator <<(ostream& out, const RKF45& in) {
   in.print(out);
   return out;
+}
+
+// Print the settings and current state of the system to the given
+// stream. Useful for debugging. Default stream is cout.
+void RKF45::print_settings(ostream& s) const {
+  s << "Current system settings:\n"
+    << "\tAbsolute error: " << get_absolute_error() << "\n"
+    << "\tRelative error factor: " << get_relative_error_factor() << "\n"
+    << "Current system status\n"
+    << "\tNumber of steps: " << steps() << "\n"
+    << "\tdt0: " << get_dt0() << "\n"
+    << "\tNext dt: " << get_next_dt() << "\n"
+    << "\tMax delta dt factor: " << get_max_delta_dt_factor() << "\n"
+    << "----------------------------------------------------\n"
+    << "current system state:\n";
+  print_state(s);
+  s << endl;
+}
+void RKF45::print_settings() const {
+  print_settings(cout);
 }
 // ----------------------------------------------------------------------
 
@@ -700,6 +766,12 @@ void RKF45::step() {
   // defualt, choose a dt0 automatically.
   if ( steps() < 2 && get_dt0() == DEFAULT_DT0 ) {
     set_dt0();
+    if ( debug_level >= 1 ) {
+      cout << "WARNING: No dt0 set. Initializing a reasonable value.\n"
+	   << "Chosen value: "
+	   << get_dt0()
+	   << endl;
+    }
   }
   // A few convenience terms
   double h = get_next_dt();
@@ -728,7 +800,7 @@ void RKF45::step() {
 
     error = norm_difference(y_new_order5,y_new_order4);
     
-    if ( debugging ) {
+    if ( debug_level >= 2 ) {
       cout << "\tSafety margin: " << get_safety_margin() << endl;
       cout << "\tCurrent step size: " << h << endl;
       cout << "\tError tolerance: " << get_error_tolerance() << endl;
@@ -748,7 +820,7 @@ void RKF45::step() {
     }
     if ( error > get_error_tolerance() ) {
       h = h/2.0;
-      if ( debugging ) {
+      if ( debug_level >= 2 ) {
 	cout << "Step size too large. Reducing by factor of 2." << endl;
       }
     }
@@ -759,15 +831,16 @@ void RKF45::step() {
   
   // Finally, set the new step size and report it.
   set_next_dt(new_step_size);
-  if ( debugging ) {
+  if ( debug_level >= 2 ) {
     cout << "New step size: " << get_next_dt() << endl;
     }
   // set y and t, and end.
   last_dt = h;
   ts.push_back(t+h);
-  ys.push_back(y_new_order4);
+  ys.push_back( using_5th_order() ? y_new_order5 : y_new_order4 );
+  errors.push_back(error);
   
-  if (debugging ) {
+  if (debug_level >= 2 ) {
     print_state();
   }
 }
@@ -788,6 +861,8 @@ void RKF45::reset() {
   ys.push_back(y0);
   ts.resize(0);
   ts.push_back(t0);
+  errors.resize(0);
+  errors.push_back(0);
   set_next_dt(get_dt0());
   assert ( ys.size() == 1 && ts.size() == 1
 	   && "Reset succesfull." );
@@ -801,7 +876,7 @@ void RKF45::reset() {
 
 // A convenience function. Sets all the fields to their default values.
 void RKF45::set_defaults() {
-  check_consistency();
+  set_use_5th_order_terms(DEFAULT_USE_5TH_ORDER);
   t0 = DEFAULT_T0;
   use_optional_arguments = DEFAULT_USE_OPTIONAL_ARGS;
   max_dt = default_max_dt();
@@ -810,9 +885,10 @@ void RKF45::set_defaults() {
   absolute_error = default_absolute_error();
   relative_error_factor = DEFAULT_RELATIVE_ERROR_FACTOR;
   safety_margin = DEFAULT_SAFETY_MARGIN;
-  debugging = DEFAULT_OUTPUT_DEBUG_INFO;
+  debug_level = DEFAULT_DEBUG_LEVEL;
   min_dt = default_min_dt();
   set_max_delta_dt();
+  check_consistency();
 }
 
 // A convenience function. Wraps the function f = y'. Depending on
@@ -868,7 +944,7 @@ double RKF45::norm_difference(const dVector& a, const dVector& b) const {
   for (unsigned int i = 0; i < a.size(); i++) {
     output += (a[i] - b[i]) * (a[i] - b[i]);
   }
-  return output;
+  return sqrt(output);
 }
 
 // Subtracts dVector b from a. Outputs a new vector that is their
@@ -933,7 +1009,7 @@ double RKF45::calculate_new_step_size(const dVector y_new_order4,
   double denominator =  2.0 * norm_difference(y_new_order4,y_new_order5);
   s = get_safety_margin() * pow( numerator/denominator, 0.25 );
 
-  if ( debugging ) {
+  if ( debug_level >= 3 ) {
     cout << "\tDesired s factor: " << s << endl;
   }
   
@@ -943,7 +1019,7 @@ double RKF45::calculate_new_step_size(const dVector y_new_order4,
   if ( s > get_max_delta_dt_factor() + 1 ) {
     s  = get_max_delta_dt_factor() + 1;
   }
-  if ( debugging ) {
+  if ( debug_level >=3 ) {
     cout << "\tSelected s factor: " << s << endl;
   }
 
@@ -973,20 +1049,23 @@ void RKF45::make_ks(dVector k[], double h) const {
     y = y_of_t;
     for (int j = 0; j < i; j++) {
       linear_combination_in_place(y,BUTCHER_A[i][j],k[j]);
-      // TEMPORARY DEBUGGING STATEMENT
-      cout << "\t\t" << j << ": [ ";
-      for (dVector::const_iterator it = y.begin(); it != y.end(); ++it) {
+      if ( debug_level >= 3 ) {
+	cout << "\t\t" << j << ": [ ";
+	for (dVector::const_iterator it = y.begin(); it != y.end(); ++it) {
+	  cout << (*it) << " ";
+	}
+	cout << "]" << endl;
+      }
+    }
+    k[i] = scalar_multiplication(h,f(t+BUTCHER_C[i]*h,y));
+    if ( debug_level >=3 ) {
+      cout << "\tk[" << i << "] = [ ";
+      for (dVector::const_iterator it = k[i].begin();
+	   it != k[i].end(); ++it) {
 	cout << (*it) << " ";
       }
       cout << "]" << endl;
     }
-    k[i] = scalar_multiplication(h,f(t+BUTCHER_C[i]*h,y));
-    // TEMPORARY DEBUGGING STATEMENT
-    cout << "\tk[" << i << "] = [ ";
-    for (dVector::const_iterator it = k[i].begin(); it != k[i].end(); ++it) {
-      cout << (*it) << " ";
-    }
-    cout << "]" << endl;
   }
 }
 

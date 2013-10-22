@@ -1,7 +1,7 @@
 // rkf45.hpp
 
 // Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-// Time-stamp: <2013-10-19 12:59:46 (jonah)>
+// Time-stamp: <2013-10-22 00:27:41 (jonah)>
 
 // This is the prototype for my implementation of the 4-5
 // Runge-Kutta-Feldberg adaptive step size integrator. For simplicity,
@@ -65,20 +65,19 @@
 // where rtoll is the relative error tolerance and atoll is the
 // absolute error tolerance. l2_norm(y) is the L2 norm of y.
 
-// By default the relative error tolerance is the square root of
-// matchine epsilon and the maximum error tolerance is the square root
-// of <maximum double value>
+// By default the absolute error tolerance is the square root of
+// matchine epsilon.
 
 // You can also set the relative error tolerance. The relative error
 // tolerance is, by default, 0.01% of the absolute value of the
 // smallest element of y.
 
 // The step size is chosen as
-// dt = (1-safety_margin) * absolute_error_tolerance / estimated_error,
+// dt = safety_margin * absolute_error_tolerance / estimated_error,
 // Where the estimated error is chosen using the adaptive step size
 // method. Safety keeps the step size a little smaller than the
 // maximum allowed error which might be unstable. By default,
-// safety_margin is 0.1, but you can change it.
+// safety_margin is 0.9, but you can change it.
 
 // You can also set the maximum step size. By default, it is the
 // square root of the largest double value.
@@ -280,10 +279,12 @@ public: // Public interface
   // Default safety factor for step size choices. Shrinks the step
   // size slightly for safety.
   static const double DEFAULT_SAFETY_MARGIN = 0.9;
-  // Output debug information
-  static const bool DEFAULT_OUTPUT_DEBUG_INFO = false;
+  // Output debug information. Debug level zero means no debug info output.
+  static const int DEFAULT_DEBUG_LEVEL = 0;
   // Default max change in dt percentagewise. By default, it's 100%
   static const double DEFAULT_MAX_DELTA_DT = 1;
+  // Default selection for using 5th order terms in integrator
+  static const bool DEFAULT_USE_5TH_ORDER = false;
 
   // defaults that have to be called because they're platform-dependent
   static double default_max_dt() {
@@ -301,11 +302,14 @@ public: // Public interface
   // ----------------------------------------------------------------------
 
 
-  // Getters 
+  // Getters
   // ----------------------------------------------------------------------
-  // Output debug information?
-  bool output_debug_info() const {
-    return debugging;
+  // Output debug information? Debug level 0 means no debug
+  // information. Debug level 1 means warnings. Debug level two means
+  // top level debug information like error estimates. Debug level
+  // three means calculation of k values, etc.
+  int output_debug_info() const {
+    return debug_level;
   }
 
   // Min dt
@@ -364,17 +368,33 @@ public: // Public interface
   // Returns the current relative error factor
   double get_relative_error_factor() const;
 
+  // Finds the relative error tolerance based on the current state of
+  // the system.
+  double get_relative_error_tolerance() const;
+
   // Returns the safety margin for step-size choice
   double get_safety_margin() const;
 
-  // Returns the function in a special wrapper.
-  
+  // Check the consistency of the butcher tableau
+  void check_consistency() const;
+
+  // Get whether or not we are using 5th order terms
+  bool using_5th_order() const;
+
+  // Print the settings and current state of the system to the given
+  // stream. Useful for debugging. Default stream is cout.
+  void print_settings(ostream& s) const;
+  void print_settings() const;
 
   // Setters
   // ----------------------------------------------------------------------
-  // Set debug information
-  void set_debug_output(bool setting) {
-    debugging = setting;
+
+  // Set debug information. Debug level 0 means no debug
+  // information. Debug level 1 means warnings. Debug level two means
+  // top level debug information like error estimates. Debug level
+  // three means calculation of k values, etc.
+  void set_debug_output(int setting) {
+    debug_level = setting;
   }
 
   // Sets the function y'=f. One version takes optional arguments. One
@@ -433,8 +453,17 @@ public: // Public interface
   void set_safety_margin();
   void set_safety_margin(double safety_margin);
 
-  // Check the consistency of the butcher tableau
-  void check_consistency();
+  // Set use fifth order terms. No arguments sets it to the default.
+  // We can choose to return fifth-order terms instead of fourth-order
+  // terms in the Runge-Kutta approximation to make the system
+  // fifth-order accurate. However, there is much less of a guarantee
+  // that the error will be truncated correctly. This is mostly for
+  // testing purposes. It also works if the user knows the appropriate
+  // step size. Default is false.
+  void set_use_5th_order_terms(bool use_terms);
+  void set_use_5th_order_terms();
+  
+  
 
 
   // Data output
@@ -468,7 +497,12 @@ public: // Public interface
   // vector. Assumes that the array is the appropriate size. If the
   // array size is wrong, you will sefgault.
   void get_y(double y_data[]) const;
-  
+
+  // Returns the local truncation error after n steps. Entering no
+  // value returns the most recent truncation error.
+  double get_local_truncation_error(int n) const;
+  double get_local_truncation_error() const;
+
   // Tests whether or not a given set of constraints is
   // satisfied. Takes a boolean function of the vector y and tests
   // whether y(t) satisfies the constraint function. This is the fast,
@@ -534,8 +568,12 @@ private: // Implementation details
 
   // Private fields.
   // ----------------------------------------------------------------------
-  // Output debug information?
-  bool debugging;
+
+  // Output debug information? There are three levels of debug. Debug
+  // level 1 outputs warnings. Debug level two outputs some top-level
+  // information like errors at each step. Debug level three outputs
+  // calculation of k factors and y values.
+  int debug_level;
 
   // The pointer to the function f.
   // f(double t, const dVector& y,const dVector& optional_args)
@@ -579,7 +617,17 @@ private: // Implementation details
   // timesteps. They're used to keep track of the current state of the
   // system.
   dVector ts; // A vector listing all t values.
-  vector< dVector > ys; // A vector listing all the y values. 
+  vector< dVector > ys; // A vector listing all the y values.
+  dVector errors; // A vector listing all the error values.
+
+  // We can choose to return fifth-order terms instead of fourth-order
+  // terms in the Runge-Kutta approximation to make the system
+  // fifth-order accurate. However, there is much less of a guarantee
+  // that the error will be truncated correctly. This is mostly for
+  // testing purposes. It also works if the user knows the appropriate
+  // step size. Default is false.
+  bool use_5th_order; // = DEFAULT_USE_5TH_ORDER;
+
   
   // Private methods
   // ----------------------------------------------------------------------
@@ -593,7 +641,7 @@ private: // Implementation details
 
   // Finds the relative error tolerance based on the current state of
   // the system.    
-  double get_relative_error_tolerance() const;
+  double relative_error_tolerance() const;
   
   // Calculates the 2-norm of the vector v
   double norm(const dVector& v) const;

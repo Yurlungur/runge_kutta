@@ -1,7 +1,7 @@
 // rkf45_test_driver.cpp
 
 // Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-// Time-stamp: <2013-10-19 13:23:18 (jonah)>
+// Time-stamp: <2013-10-22 00:21:50 (jonah)>
 
 // This is my test driver for the 4-5 Runge-Kutta_Fehlberg adatprive
 // step size integrator.
@@ -33,7 +33,15 @@ dVector f_harmonic(double t, const dVector& v) {
 
 dVector fxp(double t, const dVector& v,const dVector& power) {
   dVector output;
-  output.push_back( pow(t,power[0]) );
+  // The coefficient in front from power[0] derivatives
+  double coefficient = 1;
+  for (int i = 0; i < (int)power[0]-1; i++) {
+    output.push_back(v[i+1]);
+    coefficient *= (int)power[0] - i;
+  }
+  output.push_back(coefficient);
+  // The last component is time.
+  output.push_back(1);
   return output;
 }
 
@@ -52,6 +60,8 @@ const double T0 = 0;
 int main () {
   // We'll reuse this stream several times.
   ofstream myfile;
+  double step_size;
+  bool printing_power_data;
 
   cout << "Testing the SHO." << "\n"
        << "------------------------------------------------------------\n"
@@ -62,26 +72,14 @@ int main () {
   INITIAL_Y.push_back(1);
 
   RKF45 integrator(f_harmonic,T0,INITIAL_Y);
-  integrator.set_debug_output(true);
+  integrator.set_debug_output(1);
   integrator.set_absolute_error(1E-3);
-  integrator.set_relative_error_factor(0);
+  integrator.set_relative_error_factor(1E-2);
 
-  cout << "\nTesting the error method." << endl;
-  cout << "Absolute error: " << integrator.get_absolute_error() << "\n"
-       << "Relative error factor: "
-       << integrator.get_relative_error_factor() << "\n"
-       << "Error tolerance: " << integrator.get_error_tolerance() << "\n"
+  integrator.print_settings(cout);
+  cout << "Integrator debug level: "
+       << integrator.output_debug_info()
        << endl;
-
-  cout << "Testing the initial state." << "\n"
-       << "\tNumber of steps: " << integrator.steps() << "\n"
-       << "\tdt0 = " << integrator.get_dt0() << "\n"
-       << "\tNext dt = " << integrator.get_next_dt() << "\n"
-       << "\tMax delta dt factor = "
-       << integrator.get_max_delta_dt_factor() << "\n"
-       << "-----------------------------------------------\n"
-       << integrator << endl;
-
   cout << "\nTesting one step." << endl;
   integrator.step();
   cout << integrator << endl;
@@ -93,16 +91,18 @@ int main () {
   myfile.open("SHO.dat");
   myfile << integrator << endl;
   myfile.close();
-  /*  
+
   cout << "This concludes the test of the simple harmonic oscillator.\n"
        << endl;
-  cout << "\nNow we want to test accuracy. We Is it 4th order accurate?\n"
+  cout << "\nNow we want to test accuracy. Is it 4th order accurate?\n"
        << "-------------------------------------------------------------"
        << endl;
   INITIAL_Y.resize(0);
   OPTIONAL_ARGS.resize(0);
-  INITIAL_Y.push_back(0);
   OPTIONAL_ARGS.push_back(4);
+  for (int i = 0; i < 4+1; i++) {
+    INITIAL_Y.push_back(0);
+  }
   cout << "Initial y vector: ";
   print(INITIAL_Y);
   cout << endl;
@@ -111,19 +111,65 @@ int main () {
   cout << endl;
   cout << "And f(0.1) = ";
   print(fxp(0.1,INITIAL_Y,OPTIONAL_ARGS));
-  cout << " (it should equal 10^(-4).)" << endl;
-  cout << "Testing integrator reset functions.\n"
+  cout << "\nTesting integrator reset functions.\n"
        << "We will set the step size to 0.1 to avoid fitting to error."
        << endl;
+
+  // ----------------------------------------------------------------------
+  step_size = 1;
+  printing_power_data = false;
+  // ----------------------------------------------------------------------
 
   integrator.set_f(fxp);
   integrator.set_optional_args(OPTIONAL_ARGS);
   integrator.set_y0(INITIAL_Y);
-  integrator.set_t0(1);
-  integrator.set_absolute_error(0);
-  integrator.set_relative_error_factor(1E-2);
-  //  integrator.set_min_dt(0.1);
-  //  integrator.set_max_dt(0.1);
+  integrator.set_t0(0);
+  integrator.set_absolute_error(100);
+  integrator.set_relative_error_factor(100);
+  integrator.set_next_dt(step_size);
+  integrator.set_min_dt(step_size);
+  integrator.set_max_dt(step_size);
+  integrator.reset();
+  cout << "Before integrating, here's the integrator pre-reset.\n"
+       << "\tSteps: " << integrator.steps() << "\n"
+       << "\tSize: " << integrator.size() << "\n"
+       << "\ty0: ";
+  print(integrator.get_y0());
+  cout << "\n\tt0: " << integrator.get_t0() << "\n"
+       << "\tdt0: " << integrator.get_dt0() << "\n"
+
+       << "\tt: " << integrator.get_t() << "\n";
+  cout << "State\n" << integrator << endl;
+
+  cout << "Now let's try integrating the interval [0,1].\n"
+       << "Because the method is 4th-order accurate,\n"
+       << "we should get the right answer in just one step."
+       <<endl;
+  integrator.integrate(1);
+  cout << integrator << endl;
+  cout << "The integrator should have found y[0] to be:\n"
+       << "about 1.4641. Is it?"
+       << endl;
+  integrator.print_state(cout);
+  if ( printing_power_data ) {
+    cout << "\nPrinting the output to a file." << endl;
+    myfile.open("x_to_the_fourth.dat");
+    myfile << integrator << endl;
+    myfile.close();
+  }
+
+  cout << "\n-------------------------------------------------------------"
+       << endl;
+
+  cout << "Let's see how accurate the integrator is to fifth order.\n"
+       << "We don't expect perfect accuracy anymore."
+       << endl;
+
+  OPTIONAL_ARGS[0] = 5;
+  integrator.set_optional_args(OPTIONAL_ARGS);
+  INITIAL_Y.push_back(0);
+  integrator.set_y0(INITIAL_Y);
+  integrator.set_t0(0);
   integrator.reset();
   cout << "Before integrating, here's the integrator pre-reset.\n"
        << "\tSteps: " << integrator.steps() << "\n"
@@ -137,13 +183,59 @@ int main () {
   cout << "State\n" << integrator << endl;
 
   cout << "Now let's try integrating the interval [0,1]" << endl;
-  integrator.integrate(2);
+  integrator.integrate(1);
   cout << integrator << endl;
-  cout << "The integrator should have found the answer to be:\n"
-       << "about 6.2. Is it?"
+  cout << "The correct value for y[0] is:\n"
+       << "about 1.0 Is it? (We don't expect it to be.)"
        << endl;
   integrator.print_state(cout);
-  cout << endl;
-  */
+  if ( printing_power_data ) {
+    cout << "\nPrinting the output to a file." << endl;
+    myfile.open("x_to_the_fifth_fourth_order_tools.dat");
+    myfile << integrator << endl;
+    myfile.close();
+  }
+
+  cout << "\n-------------------------------------------------------------"
+       << endl;
+
+  cout << "If we use the fifth-order Butcher Tableau for the integrator\n"
+       << "to generate data rather than error estimates, we might get the\n"
+       << "correct answer here. Let's try it."
+       << endl;
+
+  integrator.reset();
+  integrator.set_use_5th_order_terms(true);
+  cout << "Before integrating, here's the integrator pre-reset.\n"
+       << "\tSteps: " << integrator.steps() << "\n"
+       << "\tSize: " << integrator.size() << "\n"
+       << "\ty0: ";
+  print(integrator.get_y0());
+  cout << "\n\tt0: " << integrator.get_t0() << "\n"
+       << "\tdt0: " << integrator.get_dt0() << "\n"
+
+       << "\tt: " << integrator.get_t() << "\n";
+  cout << "State\n" << integrator << endl;
+
+  cout << "Now let's try integrating the interval [0,1]" << endl;
+  integrator.integrate(1);
+  cout << integrator << endl;
+  cout << "The correct value for y[0] is:\n"
+       << "about 1.0 Is it? (We do expect it to be.)"
+       << endl;
+  integrator.print_state(cout);
+  if ( printing_power_data ) {
+    cout << "\nPrinting the output to a file." << endl;
+    myfile.open("x_to_the_fifth_fifth_order_tools.dat");
+    myfile << integrator << endl;
+    myfile.close();
+  }
+
+  cout << "\n-------------------------------------------------------------"
+       << endl;
+
+
+  cout << "\n\nThis concludes the test of the RKF45 class. Thanks!" << endl;
+
   return 0;
 }
