@@ -1,7 +1,7 @@
 // rkf45.hpp
 
 // Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-// Time-stamp: <2013-10-22 00:27:41 (jonah)>
+// Time-stamp: <2013-11-01 21:30:46 (jonah)>
 
 // This is the prototype for my implementation of the 4-5
 // Runge-Kutta-Feldberg adaptive step size integrator. For simplicity,
@@ -98,17 +98,10 @@
 #include <iomanip> // For manipulating the output.
 #include <float.h> // For machine precision information
 #include <cmath> // for math
-// Namespace specification. For convenience.
-using std::cout;
-using std::endl;
-using std::vector;
-using std::ostream;
-using std::istream;
-using std::sqrt;
 
 // We use the dVector type a lot, so let's define a type for it
 // to make things more readable.
-typedef vector<double> dVector;
+typedef std::vector<double> dVector;
 
 
 // The Butcher Tableau for the Runge-Kutta Fehlberg Method
@@ -288,13 +281,13 @@ public: // Public interface
 
   // defaults that have to be called because they're platform-dependent
   static double default_max_dt() {
-    return sqrt(DBL_MAX);
+    return std::sqrt(DBL_MAX);
   }
   static double default_absolute_error() {
-    return sqrt(DBL_EPSILON);
+    return std::sqrt(DBL_EPSILON);
   }
   static double default_min_dt() {
-    return sqrt(DBL_EPSILON);
+    return std::sqrt(DBL_EPSILON);
   }
 
   
@@ -382,8 +375,8 @@ public: // Public interface
   bool using_5th_order() const;
 
   // Print the settings and current state of the system to the given
-  // stream. Useful for debugging. Default stream is cout.
-  void print_settings(ostream& s) const;
+  // stream. Useful for debugging. Default stream is std::cout.
+  void print_settings(std::ostream& s) const;
   void print_settings() const;
 
   // Setters
@@ -534,18 +527,18 @@ public: // Public interface
 				 int n) const;
 
   // Prints the integration history to an output stream. No stream
-  // choice means it prints to cout. This is not the just the current
+  // choice means it prints to std::cout. This is not the just the current
   // state of the system. This is everything.
   void print() const;
-  void print(ostream& out) const;
+  void print(std::ostream& out) const;
 
-  // Prints the current state of the system to ostream out. For
+  // Prints the current state of the system to std::ostream out. For
   // debugging really.
-  void print_state(ostream& out) const;
+  void print_state(std::ostream& out) const;
   void print_state() const;
 
   // Overload the stream input operator. Works like print(out).
-  friend ostream& operator <<(ostream& out, const RKF45& in);
+  friend std::ostream& operator <<(std::ostream& out, const RKF45& in);
 
 
   // Integration control
@@ -617,7 +610,7 @@ private: // Implementation details
   // timesteps. They're used to keep track of the current state of the
   // system.
   dVector ts; // A vector listing all t values.
-  vector< dVector > ys; // A vector listing all the y values.
+  std::vector< dVector > ys; // A vector listing all the y values.
   dVector errors; // A vector listing all the error values.
 
   // We can choose to return fifth-order terms instead of fourth-order
