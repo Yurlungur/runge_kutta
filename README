@@ -1,7 +1,7 @@
 runge_kutta/README
 
 Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-Time-stamp: <2013-10-22 00:29:09 (jonah)>
+Time-stamp: <2013-11-02 23:45:12 (jonah)>
 
 My implementation of the 4-5 Runge-Kutta-Feldberg adaptive step size
 integrator. For simplicity, and so that I can bundle public and
@@ -37,55 +37,55 @@ http://en.wikipedia.org/wiki/Runge%E2%80%93Kutta%E2%80%93Fehlberg_method
 
 
 
-// Usage
-// ----------------------------------------------------------------------
+Usage
+----------------------------------------------------------------------
 
-// The RKF45 integrator expects a function of the form
-// double f(double t, const dVector& y),
-// where y is the array representing the n-dimensional ODE system at
-// time t. The length of the double vector is assumed to be
-// appropriate.
+The RKF45 integrator expects a function of the form
+double f(double t, const dVector& y),
+where y is the array representing the n-dimensional ODE system at
+time t. The length of the double vector is assumed to be
+appropriate.
 
-// Optionally, you can have a function f of the form
-// double f(double t, dVector& y, const dVector& optional_args),
-// where the optional arguments modify f and thus f(t,y).
+Optionally, you can have a function f of the form
+double f(double t, dVector& y, const dVector& optional_args),
+where the optional arguments modify f and thus f(t,y).
 
-// This means that if your system is not in this form you'll need to
-// write it in this form before you can use RKF45.
+This means that if your system is not in this form you'll need to
+write it in this form before you can use RKF45.
 
-// To start the algorithm you need an initial step size, so this must
-// be input by hand. If you like, you can also impose a maximum step size.
+To start the algorithm you need an initial step size, so this must
+be input by hand. If you like, you can also impose a maximum step size.
 
-// The error tolerance is the sum of two error terms, a relative error
-// term and an absolute error term,
+The error tolerance is the sum of two error terms, a relative error
+term and an absolute error term,
 
-// error_tolerance = rtoll * l2_norm(y) + atoll,
+error_tolerance = rtoll * l2_norm(y) + atoll,
 
-// where rtoll is the relative error tolerance and atoll is the
-// absolute error tolerance. l2_norm(y) is the L2 norm of y.
+where rtoll is the relative error tolerance and atoll is the
+absolute error tolerance. l2_norm(y) is the L2 norm of y.
 
-// By default the absolute error tolerance is the square root of
-// matchine epsilon.
+By default the absolute error tolerance is the square root of
+matchine epsilon.
 
-// You can also set the relative error tolerance. The relative error
-// tolerance is, by default, 0.01% of the absolute value of the
-// smallest element of y.
+You can also set the relative error tolerance. The relative error
+tolerance is, by default, 0.01% of the absolute value of the
+smallest element of y.
 
-// The step size is chosen as
-// dt = safety_margin * absolute_error_tolerance / estimated_error,
-// Where the estimated error is chosen using the adaptive step size
-// method. Safety keeps the step size a little smaller than the
-// maximum allowed error which might be unstable. By default,
-// safety_margin is 0.9, but you can change it.
+The step size is chosen as
+dt = safety_margin * absolute_error_tolerance / estimated_error,
+Where the estimated error is chosen using the adaptive step size
+method. Safety keeps the step size a little smaller than the
+maximum allowed error which might be unstable. By default,
+safety_margin is 0.9, but you can change it.
 
-// You can also set the maximum step size. By default, it is the
-// square root of the largest double value.
+You can also set the maximum step size. By default, it is the
+square root of the largest double value.
 
-// You can choose how RKF45 outptus the solution after a given
-// time. You can have it set fill a pre-allocated double array
-// or you can have it output a vector.
+You can choose how RKF45 outptus the solution after a given
+time. You can have it set fill a pre-allocated double array
+or you can have it output a vector.
 
-// ----------------------------------------------------------------------
+----------------------------------------------------------------------
 
 
 Installation

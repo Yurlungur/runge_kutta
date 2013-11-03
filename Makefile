@@ -1,6 +1,6 @@
 # Makefile for the Runge-Kutta Package
 # Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-# Time-stamp: <2013-10-22 00:28:30 (jonah)>
+# Time-stamp: <2013-11-02 23:46:41 (jonah)>
 
 # The default compiler is g++
 CXX = g++
@@ -23,4 +23,4 @@ rkf45.o: rkf45.hpp
 .PHONY: default all rkf45_test_driver
 
 clean:
-	$(RM) *.bin *.o
+	$(RM) rkf45.o rkf45_test_driver.o rkf45_test_driver.bin
