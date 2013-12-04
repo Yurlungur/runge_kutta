@@ -1,7 +1,7 @@
 // rkf45.cpp
 
 // Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-// Time-stamp: <2013-10-21 20:56:56 (jonah)>
+// Time-stamp: <2013-11-27 12:14:04 (jonah)>
 
 // This is my implementation of the 4-5 Runge-Kutta-Fehlberg adaptive
 // step size integrator. For simplicity, and so that I can bundle
@@ -656,7 +656,7 @@ double RKF45::get_local_truncation_error() const {
 // whether y(t) satisfies the constraint function. This is the fast,
 // safe solution to the problem of monitoring constriants. t is
 // chosen as t after n time steps.
-bool RKF45::test_constraints(bool (*constraints)(double,const dVector),
+bool RKF45::test_constraints(bool (*constraints)(double,const dVector&),
 			     int n) const {
   assert ( n < (int)ts.size() && "We have not integrated that far yet!" );
   return constraints(ts[n],ys[n]);
@@ -667,7 +667,7 @@ bool RKF45::test_constraints(bool (*constraints)(double,const dVector),
 // whether y(t) satisfies the constraint function. t is set to the
 // current time. This is the fast, safe solution to the problem of
 // monitoring constriants.
-bool RKF45::test_constraints(bool (*constraints)(double,const dVector)) const {
+bool RKF45::test_constraints(bool (*constraints)(double,const dVector&)) const {
   return constraints(ts.back(),ys.back());
 }
 
@@ -676,17 +676,28 @@ bool RKF45::test_constraints(bool (*constraints)(double,const dVector)) const {
 // return a vector<double> where each element shows how much the y
 // vector failed to satisfy the appropriate constraint
 // equation. 
-dVector RKF45::test_constraint_degree(dVector (*constraints)(double,const dVector)) const {
+dVector RKF45::test_constraint_degree(dVector (*constraints)(double,const dVector&)) const {
   return constraints(ts.back(),ys.back());
 }
 
+// Evaluates a function double function on the y vector and on the
+// time and returns the output of the function. Useful for energy
+// methods. Uses the most recent time by default. But any time is
+// possible. Feed the number of time steps n in last
+double RKF45::eval_function(double (*to_eval)(double,const dVector&)) const {
+  return to_eval(ts.back(),ys.back());
+}
+double RKF45::eval_function(double (*to_eval)(double,const dVector&),
+		       int n) const {
+  return to_eval(ts[n],ys[n]);
+}
 
 // Tests by how much the y vector at time t fails to satisfy the
 // constraint function passed in. The constraint function should
 // return a vector<double> where each element shows how much the y
 // vector failed to satisfy the appropriate constraint
 // equation. Passed by reference.
-dVector RKF45::test_constraint_degree(dVector (*constraints)(double,const dVector), int n) const {
+dVector RKF45::test_constraint_degree(dVector (*constraints)(double,const dVector&), int n) const {
   assert ( n < (int)ts.size() && "We have not integrated that far yet!" );
   return constraints(ts[n],ys[n]);
 }
