@@ -1,7 +1,7 @@
 // rkf45_test_driver.cpp
 
 // Author: Jonah Miller (jonah.maxwell.miller@gmail.com)
-// Time-stamp: <2013-10-22 00:21:50 (jonah)>
+// Time-stamp: <2013-12-08 18:05:48 (jonah)>
 
 // This is my test driver for the 4-5 Runge-Kutta_Fehlberg adatprive
 // step size integrator.
@@ -73,8 +73,8 @@ int main () {
 
   RKF45 integrator(f_harmonic,T0,INITIAL_Y);
   integrator.set_debug_output(1);
-  integrator.set_absolute_error(1E-3);
-  integrator.set_relative_error_factor(1E-2);
+  integrator.set_absolute_error(1E-10);
+  integrator.set_relative_error_factor(1E-5);
 
   integrator.print_settings(cout);
   cout << "Integrator debug level: "
